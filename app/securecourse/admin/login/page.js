@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import styles from "../../securecourse.module.css";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -27,57 +28,107 @@ export default function AdminLoginPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error || "Login failed");
+        setError(payload.error || "Invalid credentials");
         return;
       }
 
       router.push(redirectTo);
     } catch {
-      setError("Network error");
+      setError("Network error — check your connection");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        maxWidth: "400px",
-        margin: "100px auto",
-        padding: "2rem",
-        border: "1px solid #ccc"
-      }}
-    >
-      <h1>SecureCourse Admin Login</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Username:</label>
-          <input
-            onChange={(event) => setUsername(event.target.value)}
-            required
-            style={{ width: "100%", marginBottom: "1rem", padding: "0.5rem" }}
-            type="text"
-            value={username}
-          />
+    <main className={styles.page}>
+      <div className={styles.ambient} aria-hidden="true" />
+      <div className={styles.shell}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "80vh",
+            gap: "2rem"
+          }}
+        >
+          <div className={styles.brand} style={{ textDecoration: "none" }}>
+            <span className={styles.brandMark}>SC</span>
+            <span>
+              <strong>SecureCourse</strong>
+              <small>Admin access</small>
+            </span>
+          </div>
+
+          <section
+            className={styles.callout}
+            style={{ width: "100%", maxWidth: "420px" }}
+          >
+            <p className={styles.surfaceEyebrow}>Authentication required</p>
+            <h1 className={styles.calloutTitle} style={{ fontSize: "1.5rem" }}>
+              Admin login
+            </h1>
+
+            <form className={styles.formStack} onSubmit={handleSubmit}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Username</span>
+                <input
+                  autoComplete="username"
+                  className={styles.fieldInput}
+                  disabled={loading}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="manager"
+                  required
+                  type="text"
+                  value={username}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Password</span>
+                <input
+                  autoComplete="current-password"
+                  className={styles.fieldInput}
+                  disabled={loading}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+
+              {error ? (
+                <div className={styles.feedbackError}>{error}</div>
+              ) : null}
+
+              <button
+                className={styles.solidButton}
+                disabled={loading}
+                style={{ width: "100%", justifyContent: "center" }}
+                type="submit"
+              >
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+
+            <p className={styles.helperText} style={{ marginTop: "1rem" }}>
+              Set <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> in{" "}
+              <code>.env.local</code> to override defaults.
+            </p>
+          </section>
         </div>
-        <div>
-          <label>Password:</label>
-          <input
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            style={{ width: "100%", marginBottom: "1rem", padding: "0.5rem" }}
-            type="password"
-            value={password}
-          />
-        </div>
-        {error ? <p style={{ color: "red" }}>{error}</p> : null}
-        <button disabled={loading} style={{ width: "100%" }} type="submit">
-          {loading ? "Logging in..." : "Login"}
-        </button>
-      </form>
-      <p style={{ marginTop: "1rem", fontSize: "0.875rem", opacity: 0.7 }}>
-        Default: manager / secretpass (set ADMIN_USERNAME/PASSWORD in .env.local)
-      </p>
-    </div>
+      </div>
+    </main>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense>
+      <AdminLoginForm />
+    </Suspense>
   );
 }

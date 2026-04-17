@@ -141,8 +141,8 @@ export default function SecureCourseActivationPanel() {
           )}
 
           <div className={styles.calloutActions}>
-            <Link className={styles.solidButton} href="/securecourse/mobile">
-              Open student app
+            <Link className={styles.solidButton} href="/securecourse/student">
+              Open student cabinet
             </Link>
             <Link className={styles.outlineButton} href="/securecourse/admin">
               Return to admin

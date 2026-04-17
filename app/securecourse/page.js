@@ -42,8 +42,8 @@ export default function SecureCourseLandingPage() {
             <Link className={styles.ghostButton} href="/securecourse/admin">
               Admin
             </Link>
-            <Link className={styles.solidButton} href="/securecourse/mobile">
-              Student app
+            <Link className={styles.solidButton} href="/securecourse/student">
+              Student cabinet
             </Link>
           </div>
         </header>
@@ -146,8 +146,8 @@ export default function SecureCourseLandingPage() {
             </article>
 
             <article className={styles.interfaceCard} data-reveal>
-              <span className={styles.interfaceTag}>Mobile app</span>
-              <h3>Protected lesson watching</h3>
+              <span className={styles.interfaceTag}>Student cabinet</span>
+              <h3>Protected lesson watching in the browser</h3>
               <ul className={styles.interfaceList}>
                 {securecourseContent.studentApp.protectionChecklist.map((feature) => (
                   <li key={feature}>{feature}</li>
@@ -262,8 +262,8 @@ export default function SecureCourseLandingPage() {
             <Link className={styles.solidButton} href="/securecourse/admin">
               Admin panel
             </Link>
-            <Link className={styles.outlineButton} href="/securecourse/mobile">
-              Student app
+            <Link className={styles.outlineButton} href="/securecourse/student">
+              Student cabinet
             </Link>
           </div>
         </section>

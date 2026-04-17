@@ -380,9 +380,19 @@ export default function SecureCourseAdminPage() {
               <button className={styles.outlineButton} onClick={loadAdminData} type="button">
                 Refresh live data
               </button>
-              <Link className={styles.solidButton} href="/securecourse">
-                Open activation page
+              <Link className={styles.ghostButton} href="/securecourse">
+                Public site
               </Link>
+              <button
+                className={styles.outlineButton}
+                onClick={async () => {
+                  await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+                  window.location.href = "/securecourse/admin/login";
+                }}
+                type="button"
+              >
+                Logout
+              </button>
             </div>
           </header>
 
