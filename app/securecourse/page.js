@@ -1,272 +1,239 @@
+"use client";
+
 import Link from "next/link";
-import SecureCourseActivationPanel from "@/components/securecourse-activation-panel";
-import { securecourseContent } from "@/lib/securecourse-content";
-import styles from "./securecourse.module.css";
+import { useState } from "react";
+import s from "./securecourse.module.css";
 
-function SectionHeading({ kicker, title, copy }) {
+const FEATURES = [
+  {
+    icon: "🔐",
+    title: "Одноразовые токены доступа",
+    desc: "Менеджер выдаёт токен конкретному ученику. После активации токен сгорает. Повторный вход — новый токен.",
+  },
+  {
+    icon: "📱",
+    title: "Одна активная сессия",
+    desc: "Ученик может смотреть с одного устройства одновременно. Попытка войти с другого — старая сессия блокируется.",
+  },
+  {
+    icon: "🎬",
+    title: "Защищённое видео",
+    desc: "Видео хранится в Mux или Cloudflare Stream. Ни одного файла в репозитории. Студент получает подписанную ссылку только на время урока.",
+  },
+  {
+    icon: "📋",
+    title: "Полный аудит",
+    desc: "Каждое действие логируется: вход, активация токена, просмотр видео, выход, отзыв сессии.",
+  },
+  {
+    icon: "🪪",
+    title: "Динамический водяной знак",
+    desc: "Email, ID сессии и время отображаются поверх видео. Утечки можно отследить.",
+  },
+  {
+    icon: "⚡",
+    title: "Мгновенный выход",
+    desc: "Неактивность, смена устройства или ручной logout — сессия удаляется на сервере немедленно.",
+  },
+];
+
+const STEPS = [
+  { n: "1", title: "Создать ученика", desc: "Менеджер добавляет email в систему" },
+  { n: "2", title: "Выдать токен", desc: "Одноразовый токен с коротким TTL" },
+  { n: "3", title: "Ученик активирует", desc: "На этой странице или через ссылку" },
+  { n: "4", title: "Сессия открыта", desc: "Доступ к курсам и урокам в браузере" },
+];
+
+export default function PublicPage() {
+  const [token, setToken] = useState("");
+  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+  const [message, setMessage] = useState("");
+
+  async function handleActivate(e) {
+    e.preventDefault();
+    if (!token.trim()) return;
+    setStatus("loading");
+    setMessage("");
+
+    try {
+      const r = await fetch("/api/securecourse/auth/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token.trim() }),
+        credentials: "include",
+      });
+      const data = await r.json().catch(() => ({}));
+
+      if (r.ok) {
+        setStatus("success");
+        setMessage("Доступ открыт! Переходим в кабинет...");
+        setTimeout(() => (window.location.href = "/securecourse/student"), 1200);
+      } else {
+        setStatus("error");
+        setMessage(data.message || "Неверный или истёкший токен.");
+      }
+    } catch {
+      setStatus("error");
+      setMessage("Ошибка сети. Попробуйте ещё раз.");
+    }
+  }
+
   return (
-    <div className={styles.sectionHead} data-reveal>
-      <p className={styles.sectionKicker}>{kicker}</p>
-      <h2 className={styles.sectionTitle}>{title}</h2>
-      <p className={styles.sectionText}>{copy}</p>
-    </div>
-  );
-}
+    <main className={s.page}>
+      <div className={s.ambient} aria-hidden="true" />
+      <div className={s.shell}>
 
-export default function SecureCourseLandingPage() {
-  const { brand, publicSite } = securecourseContent;
-
-  return (
-    <main className={styles.page}>
-      <div className={styles.ambient} aria-hidden="true" />
-
-      <div className={styles.shell}>
-        <header className={styles.topbar} data-reveal>
-          <Link className={styles.brand} href="/securecourse">
-            <span className={styles.brandMark}>SC</span>
+        {/* ─── NAV ─── */}
+        <header className={s.topbar}>
+          <Link className={s.brand} href="/securecourse" style={{ textDecoration: "none" }}>
+            <span className={s.brandMark}>SC</span>
             <span>
-              <strong>{brand.name}</strong>
-              <small>{brand.tagline}</small>
+              <strong>SecureCourse</strong>
+              <small>Платформа защищённого обучения</small>
             </span>
           </Link>
-
-          <nav className={styles.topnav} aria-label="SecureCourse sections">
-            {publicSite.nav.map((item) => (
-              <a className={styles.topnavLink} href={item.href} key={item.href}>
-                {item.label}
-              </a>
-            ))}
+          <nav className={s.topnav}>
+            <a className={s.topnavLink} href="#features">Возможности</a>
+            <a className={s.topnavLink} href="#how">Как работает</a>
+            <a className={s.topnavLink} href="#activate">Активация</a>
           </nav>
-
-          <div className={styles.topnavActions}>
-            <Link className={styles.ghostButton} href="/securecourse/admin">
-              Admin
-            </Link>
-            <Link className={styles.solidButton} href="/securecourse/student">
-              Student cabinet
-            </Link>
+          <div className={s.topnavActions}>
+            <Link className={s.ghostButton} href="/securecourse/admin">Войти как менеджер</Link>
+            <Link className={s.solidButton} href="/securecourse/student">Кабинет ученика</Link>
           </div>
         </header>
 
-        <section className={styles.hero}>
-          <div className={styles.heroGrid}>
-            <div className={styles.heroCopy} data-reveal>
-              <p className={styles.eyebrow}>{publicSite.hero.eyebrow}</p>
-              <h1 className={styles.heroTitle}>{publicSite.hero.title}</h1>
-              <p className={styles.heroLead}>{publicSite.hero.lead}</p>
-
-              <div className={styles.heroActions}>
-                {publicSite.hero.actions.map((action) => (
-                  <Link
-                    className={
-                      action.kind === "solid" ? styles.solidButton : styles.outlineButton
-                    }
-                    href={action.href}
-                    key={action.href}
-                  >
-                    {action.label}
-                  </Link>
-                ))}
-              </div>
-
-              <p className={styles.heroNote}>
-                Lessons are intentionally viewed in the app, not on the public website, because
-                the app gives you more practical room for privacy handling and session control.
+        {/* ─── HERO ─── */}
+        <section className={s.hero}>
+          <div className={s.heroGrid}>
+            <div className={s.heroCopy}>
+              <p className={s.eyebrow}>Платформа типа GetCourse</p>
+              <h1 className={s.heroTitle}>Продавайте курсы с защитой от утечек</h1>
+              <p className={s.heroLead}>
+                Одноразовые токены доступа, одна активная сессия на ученика, защищённое стриминговое видео — всё в браузере без отдельного приложения.
               </p>
+              <div className={s.heroActions}>
+                <Link className={s.solidButton} href="/securecourse/admin">Открыть админку</Link>
+                <a className={s.outlineButton} href="#activate">Активировать доступ</a>
+              </div>
             </div>
 
-            <aside className={styles.heroPanel} data-reveal>
-              <p className={styles.panelKicker}>Platform model</p>
-              <div className={styles.panelList}>
-                {publicSite.hero.notes.map((note) => (
-                  <article className={styles.heroCard} key={note}>
-                    <span className={styles.pulseDot} aria-hidden="true" />
+            <aside className={s.heroPanel}>
+              <p className={s.panelKicker}>Статус платформы</p>
+              <div className={s.panelList}>
+                {[
+                  { icon: "✓", label: "Backend API", sub: "NestJS / PostgreSQL / Redis" },
+                  { icon: "✓", label: "Система токенов", sub: "One-time, burn after use" },
+                  { icon: "✓", label: "Сессии", sub: "Single device lock via Redis" },
+                  { icon: "✓", label: "Видеопровайдер", sub: "Mux / Cloudflare Stream" },
+                ].map((item) => (
+                  <article className={s.heroCard} key={item.label}>
+                    <span className={s.pulseDot} aria-hidden="true" />
                     <div>
-                      <strong>{note}</strong>
-                      <p>
-                        {note === "Protected streaming via Mux or Cloudflare Stream"
-                          ? "Video files never live in Git or the codebase."
-                          : note === "One-time token activation"
-                            ? "A token is issued for a person, expires quickly, and burns after first use."
-                            : note === "Single active session per student"
-                              ? "Redis-backed session state decides whether a device can continue."
-                              : "Access, playback, logout, and administrative actions are recorded."}
-                      </p>
+                      <strong>{item.label}</strong>
+                      <p>{item.sub}</p>
                     </div>
                   </article>
                 ))}
               </div>
-
-              <div className={styles.metricStrip}>
-                <div className={styles.metricCard}>
-                  <span className={styles.metricValue}>3</span>
-                  <span className={styles.metricLabel}>Interfaces</span>
+              <div className={s.metricStrip}>
+                <div className={s.metricCard}>
+                  <span className={s.metricValue}>3</span>
+                  <span className={s.metricLabel}>интерфейса</span>
                 </div>
-                <div className={styles.metricCard}>
-                  <span className={styles.metricValue}>1</span>
-                  <span className={styles.metricLabel}>Active session</span>
+                <div className={s.metricCard}>
+                  <span className={s.metricValue}>1</span>
+                  <span className={s.metricLabel}>сессия / ученик</span>
                 </div>
-                <div className={styles.metricCard}>
-                  <span className={styles.metricValue}>0</span>
-                  <span className={styles.metricLabel}>Raw video files in repo</span>
+                <div className={s.metricCard}>
+                  <span className={s.metricValue}>0</span>
+                  <span className={s.metricLabel}>файлов в repo</span>
                 </div>
               </div>
             </aside>
           </div>
         </section>
 
-        <SecureCourseActivationPanel />
-
-        <section className={styles.section} id="interfaces">
-          <SectionHeading
-            kicker="Three interfaces"
-            title="Each interface has one clear job"
-            copy="The site is the public front door, the admin panel is the control room, and the app is the protected lesson environment."
-          />
-
-          <div className={styles.interfaceGrid}>
-            <article className={styles.interfaceCard} data-reveal>
-              <span className={styles.interfaceTag}>Public site</span>
-              <h3>Marketing, activation, and routing</h3>
-              <ul className={styles.interfaceList}>
-                {publicSite.siteFeatures.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-            </article>
-
-            <article className={styles.interfaceCard} data-reveal>
-              <span className={styles.interfaceTag}>Admin panel</span>
-              <h3>Operations, access, and content flow</h3>
-              <ul className={styles.interfaceList}>
-                {securecourseContent.admin.rules.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-            </article>
-
-            <article className={styles.interfaceCard} data-reveal>
-              <span className={styles.interfaceTag}>Student cabinet</span>
-              <h3>Protected lesson watching in the browser</h3>
-              <ul className={styles.interfaceList}>
-                {securecourseContent.studentApp.protectionChecklist.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-        </section>
-
-        <section className={styles.section} id="access-flow">
-          <SectionHeading
-            kicker="Access flow"
-            title="One-time access is distributed across site, app, and backend"
-            copy="A student can discover the product on the site, but the actual protected learning state begins only after activation and session binding."
-          />
-
-          <div className={styles.flowGrid}>
-            {publicSite.accessFlow.map((step, index) => (
-              <article className={styles.stepCard} key={step.title} data-reveal>
-                <span className={styles.stepNumber}>{index + 1}</span>
-                <h3 className={styles.stepTitle}>{step.title}</h3>
-                <p className={styles.stepCopy}>{step.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.section} id="video-flow">
-          <SectionHeading
-            kicker="Video pipeline"
-            title="Video upload belongs to the admin panel, not the codebase"
-            copy="The right MVP path is direct upload into a video provider, webhook confirmation, and secure playback credentials generated only for the active student session."
-          />
-
-          <div className={styles.flowGrid}>
-            {publicSite.uploadFlow.map((step, index) => (
-              <article className={styles.stepCard} key={step.title} data-reveal>
-                <span className={styles.stepNumber}>{index + 1}</span>
-                <h3 className={styles.stepTitle}>{step.title}</h3>
-                <p className={styles.stepCopy}>{step.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <SectionHeading
-            kicker="Logic split"
-            title="Where each responsibility lives"
-            copy="This prevents the classic mistake of putting too much trust in the browser, the player, or the video provider."
-          />
-
-          <div className={styles.logicGrid}>
-            {publicSite.logicMatrix.map((card) => (
-              <article className={styles.logicCard} key={card.title} data-reveal>
-                <h3 className={styles.logicHeading}>{card.title}</h3>
-                <p className={styles.logicCopy}>{card.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.section} id="protection">
-          <SectionHeading
-            kicker="Protection stack"
-            title="Practical layers that reduce leakage and raise the cost of bypass"
-            copy="No system can stop physical filming or every form of capture, but the combination below makes leaks harder, more expensive, and more traceable."
-          />
-
-          <div className={styles.securityGrid}>
-            {publicSite.securityLayers.map((layer) => (
-              <article className={styles.securityCard} key={layer.title} data-reveal>
-                <h3 className={styles.securityTitle}>{layer.title}</h3>
-                <p className={styles.securityCopy}>{layer.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <SectionHeading
-            kicker="Delivery plan"
-            title="Build the three-interface MVP first"
-            copy="Start with the foundation that actually controls access and playback, then harden and expand once the learning loop is stable."
-          />
-
-          <div className={styles.roadmapGrid}>
-            {publicSite.roadmap.map((phase) => (
-              <article className={styles.roadmapCard} key={phase.title} data-reveal>
-                <p className={styles.roadmapMeta}>{phase.meta}</p>
-                <h3 className={styles.roadmapTitle}>{phase.title}</h3>
-                <ul className={styles.interfaceList}>
-                  {phase.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.ctaBand} data-reveal>
-          <div>
-            <p className={styles.sectionKicker}>Prototype routes</p>
-            <h2 className={styles.sectionTitle}>Explore each interface separately</h2>
-            <p className={styles.sectionText}>
-              The public site explains the model, the admin page shows operational control, and
-              the mobile route demonstrates the protected viewing experience.
+        {/* ─── ACTIVATION ─── */}
+        <section id="activate" className={s.section}>
+          <div className={s.callout} style={{ maxWidth: "540px", margin: "0 auto" }}>
+            <p className={s.surfaceEyebrow}>Активация доступа</p>
+            <h2 className={s.calloutTitle}>Введите токен доступа</h2>
+            <p className={s.workspaceText} style={{ marginBottom: "1.25rem" }}>
+              Токен выдаётся менеджером и действует 20 минут. После первой активации сгорает.
             </p>
-          </div>
-          <div className={styles.heroActions}>
-            <Link className={styles.solidButton} href="/securecourse/admin">
-              Admin panel
-            </Link>
-            <Link className={styles.outlineButton} href="/securecourse/student">
-              Student cabinet
-            </Link>
+            <form className={s.formStack} onSubmit={handleActivate}>
+              <label className={s.fieldGroup}>
+                <span className={s.fieldLabel}>Токен доступа</span>
+                <input
+                  className={s.fieldInput}
+                  disabled={status === "loading" || status === "success"}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Например: abc-123-xyz"
+                  type="text"
+                  value={token}
+                />
+              </label>
+              {status === "error" && <div className={s.feedbackError}>{message}</div>}
+              {status === "success" && <div className={s.feedbackSuccess}>{message}</div>}
+              <button
+                className={s.solidButton}
+                disabled={status === "loading" || status === "success" || !token.trim()}
+                style={{ width: "100%", justifyContent: "center" }}
+                type="submit"
+              >
+                {status === "loading" ? "Активирую…" : status === "success" ? "Готово ✓" : "Активировать доступ"}
+              </button>
+            </form>
           </div>
         </section>
+
+        {/* ─── FEATURES ─── */}
+        <section id="features" className={s.section}>
+          <div className={s.sectionHead}>
+            <p className={s.sectionKicker}>Возможности платформы</p>
+            <h2 className={s.sectionTitle}>Всё что нужно для защищённого обучения</h2>
+          </div>
+          <div className={s.interfaceGrid} style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+            {FEATURES.map((f) => (
+              <article className={s.interfaceCard} key={f.title} style={{ padding: "1.5rem" }}>
+                <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>{f.icon}</div>
+                <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.1rem", fontWeight: 700 }}>{f.title}</h3>
+                <p style={{ margin: 0, color: "var(--text-soft)", lineHeight: 1.6, fontSize: "0.92rem" }}>{f.desc}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── HOW IT WORKS ─── */}
+        <section id="how" className={s.section}>
+          <div className={s.sectionHead}>
+            <p className={s.sectionKicker}>Как работает доступ</p>
+            <h2 className={s.sectionTitle}>4 шага от выдачи до урока</h2>
+          </div>
+          <div className={s.flowGrid} style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+            {STEPS.map((step) => (
+              <article className={s.stepCard} key={step.n}>
+                <span className={s.stepNumber}>{step.n}</span>
+                <h3 className={s.stepTitle}>{step.title}</h3>
+                <p className={s.stepCopy}>{step.desc}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── CTA ─── */}
+        <section className={s.ctaBand} style={{ marginTop: "2rem", flexWrap: "wrap" }}>
+          <div>
+            <p className={s.sectionKicker}>Готово к работе</p>
+            <h2 className={s.sectionTitle} style={{ fontSize: "2rem" }}>Начните прямо сейчас</h2>
+          </div>
+          <div className={s.heroActions}>
+            <Link className={s.solidButton} href="/securecourse/admin">Открыть админку</Link>
+            <Link className={s.outlineButton} href="/securecourse/student">Кабинет ученика</Link>
+          </div>
+        </section>
+
       </div>
     </main>
   );
