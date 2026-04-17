@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: securecourse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - securecourse-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: securecourse-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - securecourse-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  pgadmin:
+    image: dpage/pgadmin4:9.4
+    container_name: securecourse-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - securecourse-pgadmin-data:/var/lib/pgadmin
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: securecourse-backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      APP_URL: http://localhost:${BACKEND_PORT}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
+      DATABASE_URL: ${DATABASE_URL_DOCKER}
+      REDIS_URL: ${REDIS_URL_DOCKER}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES}
+      PLAYBACK_TOKEN_TTL_SECONDS: ${PLAYBACK_TOKEN_TTL_SECONDS}
+      DEFAULT_VIDEO_PROVIDER: ${DEFAULT_VIDEO_PROVIDER}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      MUX_TOKEN_ID: ${MUX_TOKEN_ID}
+      MUX_TOKEN_SECRET: ${MUX_TOKEN_SECRET}
+      MUX_SIGNING_KEY_ID: ${MUX_SIGNING_KEY_ID}
+      MUX_SIGNING_PRIVATE_KEY_B64: ${MUX_SIGNING_PRIVATE_KEY_B64}
+      MUX_WEBHOOK_SECRET: ${MUX_WEBHOOK_SECRET}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID}
+      CLOUDFLARE_STREAM_API_TOKEN: ${CLOUDFLARE_STREAM_API_TOKEN}
+      CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN: ${CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN}
+      CLOUDFLARE_STREAM_SIGNING_KEY_ID: ${CLOUDFLARE_STREAM_SIGNING_KEY_ID}
+      CLOUDFLARE_STREAM_PRIVATE_KEY: ${CLOUDFLARE_STREAM_PRIVATE_KEY}
+      CLOUDFLARE_STREAM_WEBHOOK_SECRET: ${CLOUDFLARE_STREAM_WEBHOOK_SECRET}
+    ports:
+      - "${BACKEND_PORT}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  securecourse-postgres-data:
+  securecourse-redis-data:
+  securecourse-pgadmin-data:

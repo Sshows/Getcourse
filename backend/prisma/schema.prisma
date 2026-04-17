@@ -1,0 +1,364 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  INVITED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MaterialType {
+  TEXT
+  PDF
+  FILE
+  LINK
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  REVOKED
+  COMPLETED
+}
+
+enum AccessTokenType {
+  MAGIC_LINK
+  TOKEN
+  ONE_TIME_PASSWORD
+}
+
+enum AccessTokenStatus {
+  ISSUED
+  USED
+  REVOKED
+  EXPIRED
+}
+
+enum SessionStatus {
+  ACTIVE
+  LOGGED_OUT
+  REPLACED
+  REVOKED
+  EXPIRED
+}
+
+enum VideoProvider {
+  MUX
+  CLOUDFLARE_STREAM
+}
+
+enum VideoAssetStatus {
+  WAITING_UPLOAD
+  UPLOADING
+  PROCESSING
+  READY
+  ERROR
+}
+
+enum AuditActorType {
+  USER
+  ADMIN
+  SYSTEM
+  ANONYMOUS
+}
+
+enum AuditEventType {
+  USER_CREATED
+  USER_BLOCKED
+  USER_UNBLOCKED
+  COURSE_CREATED
+  LESSON_CREATED
+  LESSON_UPDATED
+  ENROLLMENT_CREATED
+  ENROLLMENT_REVOKED
+  ACCESS_TOKEN_ISSUED
+  ACCESS_TOKEN_USED
+  ACCESS_TOKEN_REVOKED
+  ACCESS_TOKEN_REUSE_BLOCKED
+  LOGIN_SUCCEEDED
+  LOGIN_FAILED
+  LOGOUT
+  SESSION_REPLACED
+  SESSION_REVOKED
+  SESSION_HEARTBEAT
+  VIDEO_UPLOAD_INTENT_CREATED
+  VIDEO_ASSET_READY
+  VIDEO_ASSET_ERROR
+  PLAYBACK_ACCESS_GRANTED
+  PLAYBACK_ACCESS_DENIED
+  SITE_LEAD_CREATED
+  WEBHOOK_RECEIVED
+  WEBHOOK_PROCESSED
+}
+
+enum WebhookProvider {
+  MUX
+  CLOUDFLARE_STREAM
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  ERROR
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  ARCHIVED
+}
+
+model User {
+  id                   String          @id @default(cuid())
+  email                String          @unique
+  fullName             String
+  role                 Role            @default(STUDENT)
+  status               UserStatus      @default(ACTIVE)
+  passwordHash         String?
+  blockedAt            DateTime?
+  blockedReason        String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  enrollments          Enrollment[]
+  accessTokens         AccessToken[]
+  issuedAccessTokens   AccessToken[]   @relation("IssuedAccessTokens")
+  sessions             UserSession[]
+  lessonProgress       LessonProgress[]
+  auditLogs            AuditLog[]      @relation("AuditActor")
+}
+
+model Course {
+  id                   String          @id @default(cuid())
+  slug                 String          @unique
+  title                String
+  shortDescription     String?
+  description          String?
+  status               CourseStatus    @default(DRAFT)
+  coverImageUrl        String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  lessons              Lesson[]
+  enrollments          Enrollment[]
+}
+
+model Lesson {
+  id                   String          @id @default(cuid())
+  courseId             String
+  slug                 String
+  title                String
+  summary              String?
+  body                 String?
+  position             Int
+  estimatedMinutes     Int?
+  status               LessonStatus    @default(DRAFT)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  course               Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  materials            LessonMaterial[]
+  videoAsset           VideoAsset?
+  progress             LessonProgress[]
+
+  @@unique([courseId, slug])
+  @@unique([courseId, position])
+}
+
+model LessonMaterial {
+  id                   String          @id @default(cuid())
+  lessonId             String
+  title                String
+  type                 MaterialType
+  position             Int
+  contentText          String?
+  fileKey              String?
+  fileName             String?
+  fileUrl              String?
+  mimeType             String?
+  sizeBytes            BigInt?
+  metadata             Json?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  lesson               Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, position])
+}
+
+model Enrollment {
+  id                   String          @id @default(cuid())
+  userId               String
+  courseId             String
+  status               EnrollmentStatus @default(ACTIVE)
+  assignedAt           DateTime        @default(now())
+  activatedAt          DateTime?
+  revokedAt            DateTime?
+  revokedReason        String?
+  progressPercent      Float           @default(0)
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course               Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  accessTokens         AccessToken[]
+  lessonProgress       LessonProgress[]
+
+  @@unique([userId, courseId])
+}
+
+model AccessToken {
+  id                   String            @id @default(cuid())
+  userId               String
+  enrollmentId         String?
+  issuedById           String?
+  tokenType            AccessTokenType   @default(TOKEN)
+  tokenHash            String            @unique
+  status               AccessTokenStatus @default(ISSUED)
+  activationExpiresAt  DateTime
+  usedAt               DateTime?
+  revokedAt            DateTime?
+  revokedReason        String?
+  metadata             Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollment           Enrollment?       @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  issuedBy             User?             @relation("IssuedAccessTokens", fields: [issuedById], references: [id], onDelete: SetNull)
+  sessions             UserSession[]
+}
+
+model UserSession {
+  id                   String          @id @default(cuid())
+  userId               String
+  accessTokenId        String?
+  status               SessionStatus   @default(ACTIVE)
+  deviceId             String?
+  deviceFingerprint    String?
+  deviceLabel          String?
+  ipAddress            String?
+  userAgent            String?
+  lastSeenAt           DateTime        @default(now())
+  idleExpiresAt        DateTime
+  revokedAt            DateTime?
+  revokedReason        String?
+  replacedBySessionId  String?
+  metadata             Json?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken          AccessToken?    @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
+}
+
+model LessonProgress {
+  id                   String          @id @default(cuid())
+  userId               String
+  lessonId             String
+  enrollmentId         String?
+  progressPercent      Float           @default(0)
+  completed            Boolean         @default(false)
+  lastPositionSeconds  Int             @default(0)
+  lastWatchedAt        DateTime?
+  updatedAt            DateTime        @updatedAt
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson               Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  enrollment           Enrollment?     @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, lessonId])
+}
+
+model VideoAsset {
+  id                   String           @id @default(cuid())
+  lessonId             String           @unique
+  provider             VideoProvider
+  externalUploadId     String?
+  externalAssetId      String?
+  playbackId           String?
+  playbackPolicy       String?
+  uploadUrl            String?
+  status               VideoAssetStatus @default(WAITING_UPLOAD)
+  originalFileName     String?
+  mimeType             String?
+  sizeBytes            BigInt?
+  durationSeconds      Int?
+  readyAt              DateTime?
+  errorMessage         String?
+  metadata             Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  lesson               Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  webhookEvents        WebhookEvent[]
+
+  @@index([provider, externalUploadId])
+  @@index([provider, externalAssetId])
+}
+
+model AuditLog {
+  id                   String           @id @default(cuid())
+  actorId              String?
+  actorType            AuditActorType
+  eventType            AuditEventType
+  entityType           String
+  entityId             String?
+  sessionId            String?
+  ipAddress            String?
+  userAgent            String?
+  metadata             Json?
+  createdAt            DateTime         @default(now())
+  actor                User?            @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([entityType, entityId])
+}
+
+model WebhookEvent {
+  id                   String           @id @default(cuid())
+  provider             WebhookProvider
+  eventType            String
+  externalEventId      String?
+  signature            String?
+  payload              Json
+  status               WebhookStatus    @default(RECEIVED)
+  processedAt          DateTime?
+  errorMessage         String?
+  videoAssetId         String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  videoAsset           VideoAsset?      @relation(fields: [videoAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+}
+
+model SiteLead {
+  id                   String          @id @default(cuid())
+  fullName             String
+  email                String
+  phone                String?
+  company              String?
+  message              String?
+  source               String?
+  status               LeadStatus      @default(NEW)
+  notes                String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([status, createdAt])
+}

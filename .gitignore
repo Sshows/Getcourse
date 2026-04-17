@@ -1,0 +1,13 @@
+.next/
+node_modules/
+.vercel/
+.env
+.env.local
+.env.development.local
+.env.production.local
+data/
+render-data-test-*
+server.err.txt
+server.out.txt
+backend/dist/
+backend/node_modules/
