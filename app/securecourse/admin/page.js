@@ -8,9 +8,9 @@ import {
   createUser,
   getDashboardSnapshot,
   issueToken,
-  revokeSession
+  revokeSession,
+  revokeToken
 } from "@/lib/securecourse-api";
-import { securecourseContent } from "@/lib/securecourse-content";
 import styles from "../securecourse.module.css";
 
 function toneClass(tone) {
@@ -44,16 +44,9 @@ function badgeClass(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) {
-    return "-";
-  }
-
+  if (!value) return "-";
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
+  if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "short",
     timeStyle: "short"
@@ -69,54 +62,32 @@ function slugify(value) {
 }
 
 export default function SecureCourseAdminPage() {
-  const { brand, admin } = securecourseContent;
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [lastIssuedToken, setLastIssuedToken] = useState(null);
+  
   const [data, setData] = useState({
-    metrics: {
-      activeSessions: 0,
-      issuedTokensToday: 0,
-      readyVideoAssets: 0,
-      totalUsers: 0
-    },
-    users: [],
-    courses: [],
-    tokens: [],
-    sessions: [],
-    uploads: [],
-    logs: []
+    metrics: { activeSessions: 0, issuedTokensToday: 0, readyVideoAssets: 0, totalUsers: 0 },
+    users: [], courses: [], tokens: [], sessions: [], uploads: [], logs: []
   });
+
   const [forms, setForms] = useState({
-    createUser: {
-      fullName: "",
-      email: ""
-    },
-    createCourse: {
-      title: "",
-      slug: "",
-      shortDescription: ""
-    },
-    enrollment: {
-      userId: "",
-      courseId: ""
-    },
-    token: {
-      enrollmentId: ""
-    }
+    createUser: { fullName: "", email: "" },
+    createCourse: { title: "", slug: "", shortDescription: "" },
+    enrollment: { userId: "", courseId: "" },
+    token: { enrollmentId: "" }
   });
 
   async function loadAdminData() {
     setLoading(true);
     setError("");
-
     try {
       const snapshot = await getDashboardSnapshot();
       setData(snapshot);
     } catch (requestError) {
-      setError(requestError.message || "Failed to load SecureCourse admin data.");
+      setError(requestError.message || "Ошибка загрузки данных админ-панели.");
     } finally {
       setLoading(false);
     }
@@ -135,60 +106,32 @@ export default function SecureCourseAdminPage() {
       }))
   );
 
+  // Pre-fill selects safely
   useEffect(() => {
     if (!forms.enrollment.userId && data.users[0]?.id) {
-      setForms((current) => ({
-        ...current,
-        enrollment: {
-          ...current.enrollment,
-          userId: data.users[0].id
-        }
-      }));
+      updateForm("enrollment", "userId", data.users[0].id);
     }
-
     if (!forms.enrollment.courseId && data.courses[0]?.id) {
-      setForms((current) => ({
-        ...current,
-        enrollment: {
-          ...current.enrollment,
-          courseId: data.courses[0].id
-        }
-      }));
+      updateForm("enrollment", "courseId", data.courses[0].id);
     }
-
     if (!forms.token.enrollmentId && activeEnrollments[0]?.id) {
-      setForms((current) => ({
-        ...current,
-        token: {
-          enrollmentId: activeEnrollments[0].id
-        }
-      }));
+      updateForm("token", "enrollmentId", activeEnrollments[0].id);
     }
-  }, [
-    activeEnrollments,
-    data.courses,
-    data.users,
-    forms.enrollment.courseId,
-    forms.enrollment.userId,
-    forms.token.enrollmentId
-  ]);
+  }, [activeEnrollments, data.courses, data.users]);
 
   function updateForm(section, field, value) {
     setForms((current) => ({
       ...current,
-      [section]: {
-        ...current[section],
-        [field]: value
-      }
+      [section]: { ...current[section], [field]: value }
     }));
   }
+
+  // --- ACTIONS ---
 
   async function handleCreateUser(event) {
     event.preventDefault();
     setBusyAction("create-user");
-    setError("");
-    setNotice("");
-
+    setError(""); setNotice("");
     try {
       await createUser({
         email: forms.createUser.email,
@@ -196,18 +139,11 @@ export default function SecureCourseAdminPage() {
         role: "STUDENT",
         status: "ACTIVE"
       });
-
-      setForms((current) => ({
-        ...current,
-        createUser: {
-          fullName: "",
-          email: ""
-        }
-      }));
-      setNotice("Student created. You can enroll them into a course now.");
+      setForms((current) => ({ ...current, createUser: { fullName: "", email: "" } }));
+      setNotice("Ученик успешно создан. Теперь зачислите его на курс.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Failed to create student.");
+      setError(requestError.message || "Ошибка создания ученика.");
     } finally {
       setBusyAction("");
     }
@@ -216,9 +152,7 @@ export default function SecureCourseAdminPage() {
   async function handleCreateCourse(event) {
     event.preventDefault();
     setBusyAction("create-course");
-    setError("");
-    setNotice("");
-
+    setError(""); setNotice("");
     try {
       const slug = forms.createCourse.slug || slugify(forms.createCourse.title);
       await createCourse({
@@ -228,19 +162,11 @@ export default function SecureCourseAdminPage() {
         description: forms.createCourse.shortDescription,
         status: "PUBLISHED"
       });
-
-      setForms((current) => ({
-        ...current,
-        createCourse: {
-          title: "",
-          slug: "",
-          shortDescription: ""
-        }
-      }));
-      setNotice("Course created and published.");
+      setForms((current) => ({ ...current, createCourse: { title: "", slug: "", shortDescription: "" } }));
+      setNotice("Новый курс успешно опубликован.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Failed to create course.");
+      setError(requestError.message || "Ошибка создания курса.");
     } finally {
       setBusyAction("");
     }
@@ -249,20 +175,17 @@ export default function SecureCourseAdminPage() {
   async function handleCreateEnrollment(event) {
     event.preventDefault();
     setBusyAction("create-enrollment");
-    setError("");
-    setNotice("");
-
+    setError(""); setNotice("");
     try {
       await createEnrollment({
         userId: forms.enrollment.userId,
         courseId: forms.enrollment.courseId,
-        note: "Assigned from SecureCourse admin UI"
+        note: "Назначено менеджером"
       });
-
-      setNotice("Enrollment created. The student can now receive a one-time token.");
+      setNotice("Ученик зачислен на курс. Теперь можно выдать ему токен доступа.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Failed to create enrollment.");
+      setError(requestError.message || "Ошибка зачисления ученика.");
     } finally {
       setBusyAction("");
     }
@@ -271,21 +194,16 @@ export default function SecureCourseAdminPage() {
   async function handleIssueToken(event) {
     event.preventDefault();
     setBusyAction("issue-token");
-    setError("");
-    setNotice("");
-
+    setError(""); setNotice("");
     try {
       const enrollment = activeEnrollments.find((item) => item.id === forms.token.enrollmentId);
-
-      if (!enrollment) {
-        throw new Error("Choose an active enrollment first.");
-      }
+      if (!enrollment) throw new Error("Выберите активное зачисление.");
 
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
         activationExpiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-        note: "Issued from SecureCourse admin UI"
+        note: "Выдано менеджером"
       });
 
       setLastIssuedToken({
@@ -294,10 +212,24 @@ export default function SecureCourseAdminPage() {
         courseTitle: enrollment.course.title,
         expiresAt: issued.activationExpiresAt
       });
-      setNotice("One-time token issued. Use it on the public activation form.");
+      setNotice("Одноразовый токен успешно сгенерирован.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Failed to issue token.");
+      setError(requestError.message || "Ошибка генерации токена.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function handleRevokeToken(tokenId) {
+    setBusyAction(`revoke-token-${tokenId}`);
+    setError(""); setNotice("");
+    try {
+      await revokeToken(tokenId, "Отозван менеджером");
+      setNotice("Токен успешно отозван.");
+      await loadAdminData();
+    } catch (requestError) {
+      setError(requestError.message || "Ошибка отзыва токена.");
     } finally {
       setBusyAction("");
     }
@@ -305,15 +237,13 @@ export default function SecureCourseAdminPage() {
 
   async function handleRevokeSession(sessionId) {
     setBusyAction(`revoke-${sessionId}`);
-    setError("");
-    setNotice("");
-
+    setError(""); setNotice("");
     try {
-      await revokeSession(sessionId, "revoked_from_securecourse_admin_ui");
-      setNotice("Session revoked.");
+      await revokeSession(sessionId, "Отозвана менеджером");
+      setNotice("Сессия успешно закрыта.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Failed to revoke session.");
+      setError(requestError.message || "Ошибка закрытия сессии.");
     } finally {
       setBusyAction("");
     }
@@ -322,76 +252,57 @@ export default function SecureCourseAdminPage() {
   const usersById = Object.fromEntries(data.users.map((user) => [user.id, user]));
 
   if (loading) {
-    return <main className={styles.page}>Loading SecureCourse live admin...</main>;
+    return <main className={styles.page}>Загрузка панели управления...</main>;
   }
 
   return (
     <main className={`${styles.page} ${styles.workspacePage}`}>
       <div className={styles.workspaceShell}>
+        
+        {/* Панель навигации (слева) */}
         <aside className={styles.sidebar}>
           <Link className={styles.brand} href="/securecourse">
             <span className={styles.brandMark}>SC</span>
             <span>
-              <strong>{brand.name}</strong>
-              <small>Admin via Next BFF</small>
+              <strong>SecureCourse</strong>
+              <small>Управление доступом</small>
             </span>
           </Link>
 
           <div className={styles.sidebarSection}>
-            <p className={styles.sidebarLabel}>Navigation</p>
-            {admin.nav.map((item, index) => (
-              <div
-                className={`${styles.sidebarLink} ${index === 0 ? styles.sidebarLinkActive : ""}`}
-                key={item}
-              >
-                <span>{item}</span>
-                {index === 0 ? <span className={styles.sidebarDot} aria-hidden="true" /> : null}
-              </div>
-            ))}
-          </div>
-
-          <div className={styles.sidebarSection}>
-            <p className={styles.sidebarLabel}>Security rules</p>
-            <ul className={styles.sidebarList}>
-              {admin.rules.map((rule) => (
-                <li key={rule}>{rule}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className={styles.sidebarUser}>
-            <strong>securecourse-admin-ui</strong>
-            <span>Next.js BFF to NestJS API</span>
+            <p className={styles.sidebarLabel}>Разделы</p>
+            <div className={`${styles.sidebarLink} ${styles.sidebarLinkActive}`}>
+              <span>Дашборд</span>
+              <span className={styles.sidebarDot} aria-hidden="true" />
+            </div>
+            <a className={styles.sidebarLink} href="#tokens">Токены</a>
+            <a className={styles.sidebarLink} href="#users">Пользователи</a>
+            <a className={styles.sidebarLink} href="#courses">Курсы</a>
+            <a className={styles.sidebarLink} href="#sessions">Сессии</a>
           </div>
         </aside>
 
+        {/* Главная рабочая область */}
         <div className={styles.adminMain}>
           <header className={styles.workspaceTopbar} data-reveal>
             <div>
-              <p className={styles.sectionKicker}>Web admin / live</p>
-              <h1 className={styles.workspaceTitle}>Users, courses, tokens, sessions, and logs</h1>
-              <p className={styles.workspaceText}>
-                This page now talks to Next.js route handlers under <code>/api/securecourse</code>,
-                and those handlers proxy into the live NestJS backend.
-              </p>
+              <p className={styles.sectionKicker}>Панель администратора</p>
+              <h1 className={styles.workspaceTitle}>Дашборд</h1>
+              <p className={styles.workspaceText}>Управление базой учеников, безопасными токенами и сессиями.</p>
             </div>
-
             <div className={styles.workspaceActions}>
               <button className={styles.outlineButton} onClick={loadAdminData} type="button">
-                Refresh live data
+                Обновить данные
               </button>
-              <Link className={styles.ghostButton} href="/securecourse">
-                Public site
-              </Link>
               <button
-                className={styles.outlineButton}
+                className={styles.ghostButton}
                 onClick={async () => {
                   await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
                   window.location.href = "/securecourse/admin/login";
                 }}
                 type="button"
               >
-                Logout
+                Выйти
               </button>
             </div>
           </header>
@@ -400,50 +311,28 @@ export default function SecureCourseAdminPage() {
           {notice ? <div className={styles.feedbackSuccess}>{notice}</div> : null}
 
           {lastIssuedToken ? (
-            <section className={styles.feedbackCard} data-reveal>
-              <p className={styles.surfaceEyebrow}>Latest one-time token</p>
-              <h2 className={styles.surfaceTitle}>Use this on the public SecureCourse page</h2>
-              <div className={styles.tokenCard}>
-                <span className={styles.tokenLabel}>Raw token</span>
+            <section className={styles.feedbackCard} style={{ backgroundColor: 'rgba(56, 194, 178, 0.05)' }} data-reveal>
+              <p className={styles.surfaceEyebrow}>Успешно сгенерировано</p>
+              <h2 className={styles.surfaceTitle}>Вручите этот токен ученику</h2>
+              <div className={styles.tokenCard} style={{ marginTop: '0.5rem' }}>
+                <span className={styles.tokenLabel}>Токен доступа (одноразовый)</span>
                 <code>{lastIssuedToken.token}</code>
               </div>
-              <p className={styles.helperText}>
-                Student: <strong>{lastIssuedToken.userEmail}</strong> | Course:{" "}
-                <strong>{lastIssuedToken.courseTitle}</strong>
+              <p className={styles.helperText} style={{ marginTop: '0.8rem' }}>
+                Пользователь: <strong>{lastIssuedToken.userEmail}</strong> | Курс: <strong>{lastIssuedToken.courseTitle}</strong>
               </p>
-              <div className={styles.calloutActions}>
-                <Link className={styles.solidButton} href="/securecourse#activate">
-                  Activate on public site
-                </Link>
-                <span className={styles.helperText}>
-                  Expires at {formatDateTime(lastIssuedToken.expiresAt)}
-                </span>
-              </div>
+              <p className={styles.helperText} style={{ opacity: 0.7 }}>
+                Сгорит после первой активации. Активен до: {formatDateTime(lastIssuedToken.expiresAt)}
+              </p>
             </section>
           ) : null}
 
           <section className={styles.metricGrid}>
             {[
-              {
-                label: "Active sessions",
-                value: String(data.metrics.activeSessions),
-                tone: "green"
-              },
-              {
-                label: "Issued tokens today",
-                value: String(data.metrics.issuedTokensToday),
-                tone: "blue"
-              },
-              {
-                label: "Ready video assets",
-                value: String(data.metrics.readyVideoAssets),
-                tone: "gold"
-              },
-              {
-                label: "Total users",
-                value: String(data.metrics.totalUsers),
-                tone: "gold"
-              }
+              { label: "Активных сессий", value: String(data.metrics.activeSessions), tone: "green" },
+              { label: "Токенов выдано", value: String(data.metrics.issuedTokensToday), tone: "blue" },
+              { label: "Видео загружено", value: String(data.metrics.readyVideoAssets), tone: "gold" },
+              { label: "Всего учеников", value: String(data.metrics.totalUsers), tone: "gold" }
             ].map((metric) => (
               <article className={styles.statCard} key={metric.label} data-reveal>
                 <span className={styles.statLabel}>{metric.label}</span>
@@ -452,45 +341,102 @@ export default function SecureCourseAdminPage() {
             ))}
           </section>
 
-          <div className={styles.adminColumns}>
+          {/* Рабочий процесс (формы слева, списки справа или в колонках) */}
+          <div className={styles.adminColumns} style={{ gridTemplateColumns: "320px minmax(0, 1fr)" }}>
+            
+            {/* Формы быстрого действия */}
+            <aside className={styles.adminRail}>
+              <section className={styles.callout} data-reveal>
+                <p className={styles.surfaceEyebrow}>Шаг 1</p>
+                <h2 className={styles.calloutTitle}>Создать ученика</h2>
+                <form className={styles.formStack} onSubmit={handleCreateUser} style={{ marginTop: '1rem' }}>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>ФИО</span>
+                    <input className={styles.fieldInput} required type="text"
+                      value={forms.createUser.fullName} onChange={(e) => updateForm("createUser", "fullName", e.target.value)} />
+                  </label>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Email</span>
+                    <input className={styles.fieldInput} required type="email"
+                      value={forms.createUser.email} onChange={(e) => updateForm("createUser", "email", e.target.value)} />
+                  </label>
+                  <button className={styles.outlineButton} type="submit" disabled={busyAction === "create-user"}>Создать пользователя</button>
+                </form>
+              </section>
+
+              <section className={styles.callout} data-reveal>
+                <p className={styles.surfaceEyebrow}>Шаг 2</p>
+                <h2 className={styles.calloutTitle}>Зачислить (Enroll)</h2>
+                <form className={styles.formStack} onSubmit={handleCreateEnrollment} style={{ marginTop: '1rem' }}>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Ученик</span>
+                    <select className={styles.fieldInput} required value={forms.enrollment.userId} onChange={(e) => updateForm("enrollment", "userId", e.target.value)}>
+                      {data.users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
+                    </select>
+                  </label>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Курс</span>
+                    <select className={styles.fieldInput} required value={forms.enrollment.courseId} onChange={(e) => updateForm("enrollment", "courseId", e.target.value)}>
+                      {data.courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                  </label>
+                  <button className={styles.outlineButton} type="submit" disabled={!data.users.length || !data.courses.length}>Открыть доступ</button>
+                </form>
+              </section>
+
+              <section className={styles.callout} data-reveal>
+                <p className={styles.surfaceEyebrow}>Шаг 3</p>
+                <h2 className={styles.calloutTitle}>Сгенерировать токен</h2>
+                <p className={styles.helperText} style={{ marginBottom: "1rem" }}>Для ученика, уже добавленного на курс.</p>
+                <form className={styles.formStack} onSubmit={handleIssueToken}>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Активное зачисление</span>
+                    <select className={styles.fieldInput} required value={forms.token.enrollmentId} onChange={(e) => updateForm("token", "enrollmentId", e.target.value)}>
+                      {activeEnrollments.map((enr) => (
+                        <option key={enr.id} value={enr.id}>{enr.user.email} → {enr.course.title}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className={styles.solidButton} type="submit" disabled={!activeEnrollments.length}>Сгенерировать</button>
+                </form>
+              </section>
+            </aside>
+
+            {/* Таблицы данных */}
             <div className={styles.workspaceBody}>
-              <section className={styles.surface} data-reveal>
+              
+              <section id="tokens" className={styles.surface} data-reveal>
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <p className={styles.surfaceEyebrow}>Courses</p>
-                    <h2 className={styles.surfaceTitle}>Live course inventory</h2>
+                    <p className={styles.surfaceEyebrow}>Контроль доступа</p>
+                    <h2 className={styles.surfaceTitle}>Одноразовые токены</h2>
                   </div>
-                  <p className={styles.surfaceMeta}>GET /api/admin/courses through Next BFF.</p>
                 </div>
-
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th>Course</th>
-                        <th>Lessons</th>
-                        <th>Enrollments</th>
-                        <th>Status</th>
+                        <th>Токен</th>
+                        <th>Кому выдан</th>
+                        <th>Создан</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.courses.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={4}>No courses yet.</td>
-                        </tr>
+                      {data.tokens.length === 0 ? (
+                        <tr><td className={styles.emptyState} colSpan={5}>Нет выданных токенов.</td></tr>
                       ) : (
-                        data.courses.map((course) => (
-                          <tr key={course.id}>
+                        data.tokens.map((token) => (
+                          <tr key={token.id}>
+                            <td><code className={styles.codePill}>{token.id}</code></td>
+                            <td>{token.user?.email || "-"}</td>
+                            <td>{formatDateTime(token.createdAt)}</td>
+                            <td><span className={`${styles.badge} ${badgeClass(token.status)}`}>{token.status}</span></td>
                             <td>
-                              <strong>{course.title}</strong>
-                              <div className={styles.helperText}>{course.slug}</div>
-                            </td>
-                            <td>{course.lessons?.length || 0}</td>
-                            <td>{course.enrollments?.length || 0}</td>
-                            <td>
-                              <span className={`${styles.badge} ${badgeClass(course.status)}`}>
-                                {course.status}
-                              </span>
+                              {token.status === "ISSUED" && (
+                                <button className={styles.tableActionButton} onClick={() => handleRevokeToken(token.id)} type="button">Отзыв</button>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -500,72 +446,73 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
-              <section className={styles.surface} data-reveal>
+              <section id="sessions" className={styles.surface} data-reveal>
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <p className={styles.surfaceEyebrow}>Users</p>
-                    <h2 className={styles.surfaceTitle}>Live student directory</h2>
+                    <p className={styles.surfaceEyebrow}>Безопасность</p>
+                    <h2 className={styles.surfaceTitle}>Активные сессии</h2>
                   </div>
-                  <p className={styles.surfaceMeta}>GET /api/admin/users through Next BFF.</p>
                 </div>
-
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th>User</th>
-                        <th>Role</th>
-                        <th>Courses</th>
-                        <th>Status</th>
-                        <th>Session</th>
+                        <th>Ученик</th>
+                        <th>Устройство/IP</th>
+                        <th>Последняя активность</th>
+                        <th>Статус</th>
+                        <th>Удалить</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.sessions.length === 0 ? (
+                        <tr><td className={styles.emptyState} colSpan={5}>Не найдено сессий.</td></tr>
+                      ) : (
+                        data.sessions.map((session) => (
+                          <tr key={session.id}>
+                            <td>{session.user?.email || "-"}</td>
+                            <td>{session.deviceLabel || "Неизвестное"}<br/><span className={styles.helperText}>{session.ipAddress}</span></td>
+                            <td>{formatDateTime(session.lastSeenAt)}</td>
+                            <td><span className={`${styles.badge} ${badgeClass(session.status)}`}>{session.status}</span></td>
+                            <td>
+                               {session.status === "ACTIVE" && (
+                                  <button className={styles.tableActionButton} onClick={() => handleRevokeSession(session.id)} type="button">Закрыть</button>
+                               )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section id="users" className={styles.surface} data-reveal>
+                <div className={styles.surfaceHeader}>
+                  <div>
+                    <h2 className={styles.surfaceTitle}>Пользователи в системе</h2>
+                  </div>
+                </div>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>ФИО и Email</th>
+                        <th>Курсы</th>
+                        <th>Текущая сессия</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.users.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={5}>No users yet.</td>
-                        </tr>
+                        <tr><td className={styles.emptyState} colSpan={3}>Нет учеников.</td></tr>
                       ) : (
                         data.users.map((user) => {
-                          const session = data.sessions.find(
-                            (item) => item.userId === user.id && item.status === "ACTIVE"
-                          );
-
+                          const session = data.sessions.find((item) => item.userId === user.id && item.status === "ACTIVE");
                           return (
                             <tr key={user.id}>
-                              <td>
-                                <strong>{user.fullName}</strong>
-                                <div className={styles.helperText}>{user.email}</div>
-                              </td>
-                              <td>{user.role}</td>
-                              <td>
-                                {user.enrollments?.length ? (
-                                  <div className={styles.compactList}>
-                                    {user.enrollments.map((enrollment) => (
-                                      <span key={enrollment.id}>{enrollment.course.title}</span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td>
-                                <span className={`${styles.badge} ${badgeClass(user.status)}`}>
-                                  {user.status}
-                                </span>
-                              </td>
-                              <td>
-                                {session ? (
-                                  <>
-                                    <strong>{session.deviceLabel || session.deviceId || "Device"}</strong>
-                                    <div className={styles.helperText}>
-                                      Last seen {formatDateTime(session.lastSeenAt)}
-                                    </div>
-                                  </>
-                                ) : (
-                                  "No active session"
-                                )}
-                              </td>
+                              <td><strong>{user.fullName}</strong><div className={styles.helperText}>{user.email}</div></td>
+                              <td>{user.enrollments?.map((enr) => enr.course.title).join(", ") || "-"}</td>
+                              <td>{session ? <span style={{ color: 'var(--teal)' }}>Онлайн</span> : <span>Офлайн</span>}</td>
                             </tr>
                           );
                         })
@@ -575,45 +522,30 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
-              <section className={styles.surface} data-reveal>
+              <section id="courses" className={styles.surface} data-reveal>
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <p className={styles.surfaceEyebrow}>Access control</p>
-                    <h2 className={styles.surfaceTitle}>Issued one-time tokens</h2>
+                    <h2 className={styles.surfaceTitle}>Курсы</h2>
                   </div>
-                  <p className={styles.surfaceMeta}>GET /api/admin/tokens and POST /issue via Next BFF.</p>
                 </div>
-
+                <form className={styles.formStack} onSubmit={handleCreateCourse} style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+                    <input className={styles.fieldInput} placeholder="Название нового курса..." required value={forms.createCourse.title} onChange={(e) => updateForm("createCourse", "title", e.target.value)} />
+                    <button className={styles.outlineButton} type="submit" disabled={busyAction === "create-course"} style={{ whiteSpace: "nowrap" }}>+ Добавить</button>
+                </form>
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
-                      <tr>
-                        <th>Token record</th>
-                        <th>User</th>
-                        <th>Course</th>
-                        <th>Issued</th>
-                        <th>Status</th>
-                      </tr>
+                      <tr><th>Курс</th><th>Уроков</th><th>Учеников</th></tr>
                     </thead>
                     <tbody>
-                      {data.tokens.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={5}>No tokens yet.</td>
-                        </tr>
+                      {data.courses.length === 0 ? (
+                        <tr><td className={styles.emptyState} colSpan={3}>Нет курсов.</td></tr>
                       ) : (
-                        data.tokens.map((token) => (
-                          <tr key={token.id}>
-                            <td>
-                              <code className={styles.codePill}>{token.id}</code>
-                            </td>
-                            <td>{token.user?.email || "-"}</td>
-                            <td>{token.enrollment?.course?.title || "-"}</td>
-                            <td>{formatDateTime(token.createdAt)}</td>
-                            <td>
-                              <span className={`${styles.badge} ${badgeClass(token.status)}`}>
-                                {token.status}
-                              </span>
-                            </td>
+                        data.courses.map((course) => (
+                          <tr key={course.id}>
+                            <td><strong>{course.title}</strong></td>
+                            <td>{course.lessons?.length || 0}</td>
+                            <td>{course.enrollments?.length || 0}</td>
                           </tr>
                         ))
                       )}
@@ -622,319 +554,7 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
-              <section className={styles.surface} data-reveal>
-                <div className={styles.surfaceHeader}>
-                  <div>
-                    <p className={styles.surfaceEyebrow}>Sessions</p>
-                    <h2 className={styles.surfaceTitle}>Single-session enforcement</h2>
-                  </div>
-                  <p className={styles.surfaceMeta}>GET /api/admin/sessions and POST revoke via Next BFF.</p>
-                </div>
-
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>User</th>
-                        <th>Device</th>
-                        <th>IP</th>
-                        <th>Started</th>
-                        <th>Last activity</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.sessions.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={7}>No active sessions.</td>
-                        </tr>
-                      ) : (
-                        data.sessions.map((session) => (
-                          <tr key={session.id}>
-                            <td>{session.user?.email || "-"}</td>
-                            <td>{session.deviceLabel || session.deviceId || "Unknown device"}</td>
-                            <td>{session.ipAddress || "-"}</td>
-                            <td>{formatDateTime(session.createdAt)}</td>
-                            <td>{formatDateTime(session.lastSeenAt)}</td>
-                            <td>
-                              <span className={`${styles.badge} ${badgeClass(session.status)}`}>
-                                {session.status}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className={styles.tableActionButton}
-                                disabled={busyAction === `revoke-${session.id}`}
-                                onClick={() => handleRevokeSession(session.id)}
-                                type="button"
-                              >
-                                {busyAction === `revoke-${session.id}` ? "Revoking..." : "Revoke"}
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className={styles.surface} data-reveal>
-                <div className={styles.surfaceHeader}>
-                  <div>
-                    <p className={styles.surfaceEyebrow}>Video pipeline</p>
-                    <h2 className={styles.surfaceTitle}>Asset status from live backend</h2>
-                  </div>
-                  <p className={styles.surfaceMeta}>Video upload UI stays next, direct upload stays provider-side.</p>
-                </div>
-
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Lesson</th>
-                        <th>Course</th>
-                        <th>Asset reference</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.uploads.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={4}>No video assets yet.</td>
-                        </tr>
-                      ) : (
-                        data.uploads.map((asset) => (
-                          <tr key={asset.id}>
-                            <td>{asset.lesson?.title || "-"}</td>
-                            <td>{asset.lesson?.course?.title || "-"}</td>
-                            <td>
-                              <code className={styles.codePill}>
-                                {asset.externalAssetId || asset.playbackId || asset.externalUploadId || asset.id}
-                              </code>
-                            </td>
-                            <td>
-                              <span className={`${styles.badge} ${badgeClass(asset.status)}`}>
-                                {asset.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className={styles.surface} data-reveal>
-                <div className={styles.surfaceHeader}>
-                  <div>
-                    <p className={styles.surfaceEyebrow}>Audit log</p>
-                    <h2 className={styles.surfaceTitle}>Live critical events</h2>
-                  </div>
-                  <p className={styles.surfaceMeta}>GET /api/admin/audit-logs through Next BFF.</p>
-                </div>
-
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Event</th>
-                        <th>Actor</th>
-                        <th>Entity</th>
-                        <th>Session</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.logs.length === 0 ? (
-                        <tr>
-                          <td className={styles.emptyState} colSpan={5}>No audit logs yet.</td>
-                        </tr>
-                      ) : (
-                        data.logs.map((log) => (
-                          <tr key={log.id}>
-                            <td>{formatDateTime(log.createdAt)}</td>
-                            <td>{log.eventType}</td>
-                            <td>
-                              {log.actorId
-                                ? usersById[log.actorId]?.email || usersById[log.actorId]?.fullName || log.actorId
-                                : log.actorType}
-                            </td>
-                            <td>
-                              {log.entityType}
-                              {log.entityId ? ` / ${log.entityId}` : ""}
-                            </td>
-                            <td>{log.sessionId || "-"}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
             </div>
-
-            <aside className={styles.adminRail}>
-              <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Quick actions</p>
-                <h2 className={styles.calloutTitle}>Create a student</h2>
-                <form className={styles.formStack} onSubmit={handleCreateUser}>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Full name</span>
-                    <input
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
-                      placeholder="Ivan Ivanov"
-                      required
-                      type="text"
-                      value={forms.createUser.fullName}
-                    />
-                  </label>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Email</span>
-                    <input
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("createUser", "email", event.target.value)}
-                      placeholder="student@example.com"
-                      required
-                      type="email"
-                      value={forms.createUser.email}
-                    />
-                  </label>
-                  <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
-                    {busyAction === "create-user" ? "Creating..." : "Create student"}
-                  </button>
-                </form>
-              </section>
-
-              <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Quick actions</p>
-                <h2 className={styles.calloutTitle}>Create a course</h2>
-                <form className={styles.formStack} onSubmit={handleCreateCourse}>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Title</span>
-                    <input
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("createCourse", "title", event.target.value)}
-                      placeholder="Analytics 101"
-                      required
-                      type="text"
-                      value={forms.createCourse.title}
-                    />
-                  </label>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Slug</span>
-                    <input
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
-                      placeholder="analytics-101"
-                      type="text"
-                      value={forms.createCourse.slug}
-                    />
-                  </label>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Short description</span>
-                    <input
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
-                      placeholder="Short summary for admins and students"
-                      type="text"
-                      value={forms.createCourse.shortDescription}
-                    />
-                  </label>
-                  <button className={styles.outlineButton} disabled={busyAction === "create-course"} type="submit">
-                    {busyAction === "create-course" ? "Creating..." : "Create course"}
-                  </button>
-                </form>
-              </section>
-
-              <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Quick actions</p>
-                <h2 className={styles.calloutTitle}>Enroll a student</h2>
-                <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Student</span>
-                    <select
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
-                      value={forms.enrollment.userId}
-                    >
-                      {data.users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.fullName} - {user.email}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Course</span>
-                    <select
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
-                      value={forms.enrollment.courseId}
-                    >
-                      {data.courses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {course.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className={styles.outlineButton}
-                    disabled={busyAction === "create-enrollment" || !data.users.length || !data.courses.length}
-                    type="submit"
-                  >
-                    {busyAction === "create-enrollment" ? "Enrolling..." : "Create enrollment"}
-                  </button>
-                </form>
-              </section>
-
-              <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Quick actions</p>
-                <h2 className={styles.calloutTitle}>Issue one-time token</h2>
-                <form className={styles.formStack} onSubmit={handleIssueToken}>
-                  <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Active enrollment</span>
-                    <select
-                      className={styles.fieldInput}
-                      onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
-                      value={forms.token.enrollmentId}
-                    >
-                      {activeEnrollments.map((enrollment) => (
-                        <option key={enrollment.id} value={enrollment.id}>
-                          {enrollment.user.email} - {enrollment.course.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className={styles.solidButton}
-                    disabled={busyAction === "issue-token" || !activeEnrollments.length}
-                    type="submit"
-                  >
-                    {busyAction === "issue-token" ? "Issuing..." : "Issue token"}
-                  </button>
-                  <p className={styles.helperText}>
-                    First working UI flow: create user, enroll, issue token, activate on public
-                    site, request playback in student app.
-                  </p>
-                </form>
-              </section>
-
-              <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>What is live now</p>
-                <h2 className={styles.calloutTitle}>Next.js BFF integration status</h2>
-                <ul className={styles.ruleList}>
-                  <li>Dashboard metrics are live</li>
-                  <li>Users, courses, tokens, sessions, logs are live</li>
-                  <li>Create user, create course, enroll, issue token are live</li>
-                  <li>Student activation and playback are wired through Next cookies</li>
-                </ul>
-              </section>
-            </aside>
           </div>
         </div>
       </div>

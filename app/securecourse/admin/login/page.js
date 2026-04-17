@@ -25,110 +25,82 @@ function AdminLoginForm() {
         body: JSON.stringify({ username, password }),
         credentials: "include"
       });
-      const payload = await response.json();
 
-      if (!response.ok) {
-        setError(payload.error || "Invalid credentials");
-        return;
+      if (response.ok) {
+        window.location.href = redirectTo;
+      } else {
+        setStatus("error");
+        setError("Неверный логин или пароль");
       }
-
-      router.push(redirectTo);
     } catch {
-      setError("Network error — check your connection");
-    } finally {
-      setLoading(false);
+      setStatus("error");
+      setError("Ошибка соединения");
     }
   }
 
   return (
-    <main className={styles.page}>
-      <div className={styles.ambient} aria-hidden="true" />
-      <div className={styles.shell}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "80vh",
-            gap: "2rem"
-          }}
-        >
-          <div className={styles.brand} style={{ textDecoration: "none" }}>
-            <span className={styles.brandMark}>SC</span>
-            <span>
-              <strong>SecureCourse</strong>
-              <small>Admin access</small>
-            </span>
-          </div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <section className={s.callout} style={{ width: "100%", maxWidth: "420px" }}>
+        <p className={s.surfaceEyebrow}>ВХОД ДЛЯ МЕНЕДЖЕРА</p>
+        <h1 className={s.calloutTitle} style={{ marginBottom: "1.5rem" }}>Админ-панель</h1>
 
-          <section
-            className={styles.callout}
-            style={{ width: "100%", maxWidth: "420px" }}
+        <form className={s.formStack} onSubmit={handleLogin}>
+          <label className={s.fieldGroup}>
+            <span className={s.fieldLabel}>Логин (ADMIN_USERNAME)</span>
+            <input
+              className={s.fieldInput}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="manager"
+              required
+              type="text"
+              value={username}
+            />
+          </label>
+
+          <label className={s.fieldGroup}>
+            <span className={s.fieldLabel}>Пароль (ADMIN_PASSWORD)</span>
+            <input
+              className={s.fieldInput}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Введите пароль..."
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+
+          {status === "error" && <div className={s.feedbackError}>{error}</div>}
+
+          <button
+            className={s.solidButton}
+            disabled={status === "loading" || !username || !password}
+            style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}
+            type="submit"
           >
-            <p className={styles.surfaceEyebrow}>Authentication required</p>
-            <h1 className={styles.calloutTitle} style={{ fontSize: "1.5rem" }}>
-              Admin login
-            </h1>
+            {status === "loading" ? "Вход..." : "Войти"}
+          </button>
+        </form>
 
-            <form className={styles.formStack} onSubmit={handleSubmit}>
-              <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Username</span>
-                <input
-                  autoComplete="username"
-                  className={styles.fieldInput}
-                  disabled={loading}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="manager"
-                  required
-                  type="text"
-                  value={username}
-                />
-              </label>
-
-              <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Password</span>
-                <input
-                  autoComplete="current-password"
-                  className={styles.fieldInput}
-                  disabled={loading}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  type="password"
-                  value={password}
-                />
-              </label>
-
-              {error ? (
-                <div className={styles.feedbackError}>{error}</div>
-              ) : null}
-
-              <button
-                className={styles.solidButton}
-                disabled={loading}
-                style={{ width: "100%", justifyContent: "center" }}
-                type="submit"
-              >
-                {loading ? "Signing in…" : "Sign in"}
-              </button>
-            </form>
-
-            <p className={styles.helperText} style={{ marginTop: "1rem" }}>
-              Set <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> in{" "}
-              <code>.env.local</code> to override defaults.
-            </p>
-          </section>
+        <div className={s.helperText} style={{ marginTop: "1.5rem", padding: "1rem", borderRadius: "1rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          Данные для входа задаются в файле <strong>.env.local</strong>:<br />
+          <code style={{ display: "block", marginTop: "0.5rem", color: "var(--teal)" }}>
+            ADMIN_USERNAME=manager<br/>
+            ADMIN_PASSWORD=secretpass
+          </code>
+          На Vercel укажите их в разделе Environment Variables. Пароль не хранится в открытом виде.
         </div>
-      </div>
-    </main>
+      </section>
+    </div>
   );
 }
 
-export default function AdminLoginPage() {
+export default function SecureCourseAdminLogin() {
   return (
-    <Suspense>
-      <AdminLoginForm />
-    </Suspense>
+    <main className={s.page}>
+      <div className={s.ambient} aria-hidden="true" />
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
+    </main>
   );
 }
