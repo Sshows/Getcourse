@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import s from "../../securecourse.module.css";
+import styles from "../../securecourse.module.css";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -42,17 +42,17 @@ function LoginForm() {
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <section className={s.callout} style={{ width: "100%", maxWidth: "420px" }}>
-        <p className={s.surfaceEyebrow}>ВХОД ДЛЯ МЕНЕДЖЕРА</p>
-        <h1 className={s.calloutTitle} style={{ marginBottom: "1.5rem" }}>
+      <section className={styles.callout} style={{ width: "100%", maxWidth: "420px" }}>
+        <p className={styles.surfaceEyebrow}>ВХОД ДЛЯ МЕНЕДЖЕРА</p>
+        <h1 className={styles.calloutTitle} style={{ marginBottom: "1.5rem" }}>
           {isLogin ? "Админ-панель" : "Регистрация"}
         </h1>
 
-        <form className={s.formStack} onSubmit={handleSubmit}>
-          <label className={s.fieldGroup}>
-            <span className={s.fieldLabel}>Email (логин)</span>
+        <form className={styles.formStack} onSubmit={handleSubmit}>
+          <label className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>Email (логин)</span>
             <input
-              className={s.fieldInput}
+              className={styles.fieldInput}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="manager@example.com"
               required
@@ -61,10 +61,10 @@ function LoginForm() {
             />
           </label>
 
-          <label className={s.fieldGroup}>
-            <span className={s.fieldLabel}>Пароль</span>
+          <label className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>Пароль</span>
             <input
-              className={s.fieldInput}
+              className={styles.fieldInput}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Введите пароль..."
               required
@@ -73,10 +73,10 @@ function LoginForm() {
             />
           </label>
 
-          {status === "error" && <div className={s.feedbackError}>{error}</div>}
+          {status === "error" && <div className={styles.feedbackError}>{error}</div>}
 
           <button
-            className={s.solidButton}
+            className={styles.solidButton}
             disabled={status === "loading" || !username || !password}
             style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}
             type="submit"
@@ -87,7 +87,7 @@ function LoginForm() {
 
         <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
           <button 
-            className={s.ghostButton} 
+            className={styles.ghostButton} 
             onClick={() => { setIsLogin(!isLogin); setStatus("idle"); setError(""); }}
             type="button"
           >
@@ -101,8 +101,8 @@ function LoginForm() {
 
 export default function SecureCourseAdminLogin() {
   return (
-    <main className={s.page}>
-      <div className={s.ambient} aria-hidden="true" />
+    <main className={styles.page}>
+      <div className={styles.ambient} aria-hidden="true" />
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>
