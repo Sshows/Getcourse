@@ -13,14 +13,15 @@ export async function POST(request) {
 
     const backendUrl = process.env.SECURECOURSE_API_URL || "http://127.0.0.1:4000/api";
     
-    const backendResponse = await fetch(`${backendUrl}/admin/auth/login`, {
+    const backendResponse = await fetch(`${backendUrl}/admin/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
     });
 
     if (!backendResponse.ok) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      const err = await backendResponse.json().catch(() => ({}));
+      return NextResponse.json({ error: err.message || "Failed to register" }, { status: 400 });
     }
 
     const payload = await backendResponse.json();
@@ -34,7 +35,7 @@ export async function POST(request) {
 
     return response;
   } catch (err) {
-    console.error("Admin login error:", err);
+    console.error("Admin register error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

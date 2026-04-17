@@ -1,36 +1,38 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import styles from "../../securecourse.module.css";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import s from "../../securecourse.module.css";
 
-function AdminLoginForm() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+
   const redirectTo = searchParams.get("redirectTo") || "/securecourse/admin";
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setLoading(true);
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setStatus("loading");
     setError("");
 
     try {
-      const response = await fetch("/api/admin/login", {
+      const endpoint = isLogin ? "/api/admin/login" : "/api/admin/register";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-        credentials: "include"
+        body: JSON.stringify({ username, password })
       });
 
       if (response.ok) {
         window.location.href = redirectTo;
       } else {
         setStatus("error");
-        setError("Неверный логин или пароль");
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Ошибка аутентификации");
       }
     } catch {
       setStatus("error");
@@ -42,15 +44,17 @@ function AdminLoginForm() {
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
       <section className={s.callout} style={{ width: "100%", maxWidth: "420px" }}>
         <p className={s.surfaceEyebrow}>ВХОД ДЛЯ МЕНЕДЖЕРА</p>
-        <h1 className={s.calloutTitle} style={{ marginBottom: "1.5rem" }}>Админ-панель</h1>
+        <h1 className={s.calloutTitle} style={{ marginBottom: "1.5rem" }}>
+          {isLogin ? "Админ-панель" : "Регистрация"}
+        </h1>
 
-        <form className={s.formStack} onSubmit={handleLogin}>
+        <form className={s.formStack} onSubmit={handleSubmit}>
           <label className={s.fieldGroup}>
-            <span className={s.fieldLabel}>Логин (ADMIN_USERNAME)</span>
+            <span className={s.fieldLabel}>Email (логин)</span>
             <input
               className={s.fieldInput}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="manager"
+              placeholder="manager@example.com"
               required
               type="text"
               value={username}
@@ -58,7 +62,7 @@ function AdminLoginForm() {
           </label>
 
           <label className={s.fieldGroup}>
-            <span className={s.fieldLabel}>Пароль (ADMIN_PASSWORD)</span>
+            <span className={s.fieldLabel}>Пароль</span>
             <input
               className={s.fieldInput}
               onChange={(e) => setPassword(e.target.value)}
@@ -77,17 +81,18 @@ function AdminLoginForm() {
             style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}
             type="submit"
           >
-            {status === "loading" ? "Вход..." : "Войти"}
+            {status === "loading" ? "Подождите..." : isLogin ? "Войти" : "Зарегистрироваться"}
           </button>
         </form>
 
-        <div className={s.helperText} style={{ marginTop: "1.5rem", padding: "1rem", borderRadius: "1rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          Данные для входа задаются в файле <strong>.env.local</strong>:<br />
-          <code style={{ display: "block", marginTop: "0.5rem", color: "var(--teal)" }}>
-            ADMIN_USERNAME=manager<br/>
-            ADMIN_PASSWORD=secretpass
-          </code>
-          На Vercel укажите их в разделе Environment Variables. Пароль не хранится в открытом виде.
+        <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
+          <button 
+            className={s.ghostButton} 
+            onClick={() => { setIsLogin(!isLogin); setStatus("idle"); setError(""); }}
+            type="button"
+          >
+            {isLogin ? "Создать аккаунт администратора" : "Уже есть аккаунт? Войти"}
+          </button>
         </div>
       </section>
     </div>
