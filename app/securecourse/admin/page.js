@@ -398,7 +398,57 @@ export default function SecureCourseAdminPage() {
                     </select>
                   </label>
                   <button className={styles.solidButton} type="submit" disabled={!activeEnrollments.length}>Сгенерировать</button>
-                </form>
+                 </form>
+              </section>
+
+              <section className={styles.callout} data-reveal>
+                 <p className={styles.surfaceEyebrow}>Дополнительно</p>
+                 <h2 className={styles.calloutTitle}>Загрузить видео</h2>
+                 <form className={styles.formStack} onSubmit={async (e) => {
+                    e.preventDefault();
+                    const lessonId = forms.video?.lessonId;
+                    const file = document.getElementById("videoFileInput").files[0];
+                    if (!lessonId || !file) return;
+                    setBusyAction("upload-video");
+                    setError(""); setNotice("");
+                    try {
+                       const intent = await import("@/lib/securecourse-api").then(m => m.createUploadIntent({
+                          lessonId: lessonId,
+                          fileName: file.name,
+                          mimeType: file.type,
+                          sizeBytes: file.size
+                       }));
+                       if (intent.uploadUrl) {
+                          await fetch(intent.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+                       } else {
+                          setError("Ошибка: отсутвует uploadUrl. Заглушка бэкенда?");
+                       }
+                       setNotice("Видео успешно залито.");
+                       document.getElementById("videoFileInput").value = "";
+                       await loadAdminData();
+                    } catch (e) {
+                       setError(e.message || "Ошибка загрузки видео");
+                    } finally {
+                       setBusyAction("");
+                    }
+                 }} style={{ marginTop: '1rem' }}>
+                    <label className={styles.fieldGroup}>
+                       <span className={styles.fieldLabel}>Урок</span>
+                       <select className={styles.fieldInput} required value={forms.video?.lessonId || ""} onChange={(e) => updateForm("video", "lessonId", e.target.value)}>
+                          <option value="">Выберите урок...</option>
+                          {data.courses.flatMap(c => c.lessons || []).map(l => (
+                             <option key={l.id} value={l.id}>{l.title}</option>
+                          ))}
+                       </select>
+                    </label>
+                    <label className={styles.fieldGroup}>
+                       <span className={styles.fieldLabel}>Файл видео</span>
+                       <input id="videoFileInput" className={styles.fieldInput} required type="file" accept="video/mp4,video/x-m4v,video/*" />
+                    </label>
+                    <button className={styles.outlineButton} type="submit" disabled={busyAction === "upload-video"}>
+                       {busyAction === "upload-video" ? "Загрузка..." : "Загрузить"}
+                    </button>
+                 </form>
               </section>
             </aside>
 
