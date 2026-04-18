@@ -1,9 +1,8 @@
 import {
-  fetchSecureCourse,
-  readBackendResponse,
   readSecureCourseAdminSession,
   secureCourseErrorResponse
 } from "@/lib/securecourse-proxy";
+import { getAdminSessionView } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -18,21 +17,10 @@ export async function GET(request) {
       });
     }
 
-    const response = await fetchSecureCourse("/admin-auth/me", {
-      headers: {
-        "x-admin-session-id": adminSession.sessionId
-      }
-    });
-
-    if (!response.ok) {
-      return NextResponse.json({
-        authenticated: false
-      });
-    }
-
-    const payload = await readBackendResponse(response);
-    return NextResponse.json(payload);
+    return NextResponse.json(getAdminSessionView(adminSession.sessionId));
   } catch (error) {
-    return secureCourseErrorResponse(error, "Admin session proxy failed.");
+    return NextResponse.json({
+      authenticated: false
+    });
   }
 }

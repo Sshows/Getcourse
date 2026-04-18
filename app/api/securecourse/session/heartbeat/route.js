@@ -1,9 +1,8 @@
 import {
-  fetchSecureCourse,
-  readBackendResponse,
   readSecureCourseSession,
   secureCourseErrorResponse
 } from "@/lib/securecourse-proxy";
+import { heartbeatStudentSession } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +22,7 @@ export async function POST(request) {
   }
 
   try {
-    const response = await fetchSecureCourse("/session/heartbeat", {
-      method: "POST",
-      body: session
-    });
-    const payload = await readBackendResponse(response);
-
-    return NextResponse.json(payload, {
-      status: response.status
-    });
+    return NextResponse.json(heartbeatStudentSession(session.userId, session.sessionId));
   } catch (error) {
     return secureCourseErrorResponse(error, "Heartbeat proxy failed.");
   }

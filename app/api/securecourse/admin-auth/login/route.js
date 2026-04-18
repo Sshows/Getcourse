@@ -1,9 +1,8 @@
 import {
-  fetchSecureCourse,
-  readBackendResponse,
   secureCourseErrorResponse,
   setSecureCourseAdminSession
 } from "@/lib/securecourse-proxy";
+import { loginAdmin } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,18 +10,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request) {
   try {
     const body = await request.json();
-    const response = await fetchSecureCourse("/admin-auth/login", {
-      method: "POST",
-      body: {
-        login: body.login,
-        password: body.password
-      }
+    const payload = loginAdmin(body.login, body.password, {
+      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+      userAgent: request.headers.get("user-agent") || null
     });
-    const payload = await readBackendResponse(response);
-
-    if (!response.ok) {
-      return NextResponse.json(payload || { message: "Admin login failed." }, { status: response.status });
-    }
 
     const nextResponse = NextResponse.json(payload);
     setSecureCourseAdminSession(request, nextResponse, payload);

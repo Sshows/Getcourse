@@ -1,4 +1,5 @@
-import { fetchSecureCourse, SECURECOURSE_ADMIN_SESSION_COOKIE } from "@/lib/securecourse-proxy";
+import { SECURECOURSE_ADMIN_SESSION_COOKIE } from "@/lib/securecourse-proxy";
+import { getAdminSessionView } from "@/lib/securecourse-store";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -11,15 +12,7 @@ export default async function SecureCourseAdminLayout({ children }) {
   }
 
   try {
-    const response = await fetchSecureCourse("/admin-auth/me", {
-      headers: {
-        "x-admin-session-id": sessionId
-      }
-    });
-
-    if (!response.ok) {
-      redirect("/securecourse/admin/login?redirectTo=/securecourse/admin");
-    }
+    getAdminSessionView(sessionId);
   } catch {
     redirect("/securecourse/admin/login?redirectTo=/securecourse/admin");
   }

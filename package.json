@@ -5,16 +5,14 @@
   "description": "SecureCourse public site, admin UI, and Next.js BFF for the SecureCourse MVP",
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/select-build.js",
-    "build:frontend": "next build",
+    "build": "next build",
     "build:backend": "cd backend && npm ci && npm run prisma:generate && npm run build",
-    "start": "node scripts/select-start.js",
-    "start:frontend": "next start",
+    "start": "next start",
     "prisma:generate": "cd backend && npm install && npm run prisma:generate",
     "prisma:deploy": "cd backend && npm run prisma:deploy",
     "prisma:seed": "echo \"Seed bypassed successfully\"",
     "start:backend": "cd backend && npm run prisma:deploy && npm run start:prod",
-    "start:prod": "node scripts/select-start.js"
+    "start:prod": "next start"
   },
   "engines": {
     "node": ">=18.18"

@@ -1,10 +1,9 @@
 import {
   clearSecureCourseSession,
-  fetchSecureCourse,
-  readBackendResponse,
   readSecureCourseSession,
   secureCourseErrorResponse
 } from "@/lib/securecourse-proxy";
+import { logoutStudent } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +12,12 @@ export async function POST(request) {
   try {
     const session = readSecureCourseSession(request);
     let payload = { ok: true };
-    let status = 200;
 
     if (session) {
-      const response = await fetchSecureCourse("/auth/logout", {
-        method: "POST",
-        body: session
-      });
-
-      payload = (await readBackendResponse(response)) || payload;
-      status = response.status;
+      payload = logoutStudent(session.userId, session.sessionId) || payload;
     }
 
-    const nextResponse = NextResponse.json(payload, { status });
+    const nextResponse = NextResponse.json(payload, { status: 200 });
     clearSecureCourseSession(request, nextResponse);
     return nextResponse;
   } catch (error) {

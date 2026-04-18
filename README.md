@@ -6,7 +6,10 @@ SecureCourse is a three-interface learning platform MVP:
 - admin panel in Next.js
 - protected backend API in NestJS
 
-The Next.js app acts as the UI and BFF layer. NestJS owns users, courses, lessons, enrollments, one-time access tokens, single-session control, video assets, logs, and webhook processing.
+The current production-safe MVP path is a self-contained Next.js app: the UI and the secure
+route handlers live in one deployment unit, and the MVP data layer is file-backed for easy
+single-service deploys. The legacy NestJS backend remains in [`backend`](./backend) for future
+expansion, but the app no longer requires a separate backend service to run the core flow.
 
 ## Routes
 
@@ -25,7 +28,7 @@ npm install
 npm run dev
 ```
 
-## Local backend setup
+## Optional legacy backend setup
 
 Backend lives in [`backend`](./backend).
 
@@ -50,4 +53,17 @@ Read [`docs/securecourse-runtime.md`](./docs/securecourse-runtime.md) for runtim
 
 ## Deployment note
 
-The frontend can be deployed to Vercel. The backend must be deployed separately with PostgreSQL and Redis available through public environment variables.
+For the simplest working deploy, run the repository as one Next.js service. Railway or Render can
+build the root app with:
+
+- Build command: `npm run build`
+- Start command: `npm run start:prod`
+
+This single service includes:
+
+- public website
+- admin auth and admin panel APIs
+- token activation
+- temporary student web cabinet APIs
+
+No separate NestJS runtime is required for the working MVP path.

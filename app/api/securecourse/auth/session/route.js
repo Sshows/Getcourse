@@ -1,20 +1,23 @@
 import { readSecureCourseSession } from "@/lib/securecourse-proxy";
+import { getStudentSessionView } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const session = readSecureCourseSession(request);
+  try {
+    const session = readSecureCourseSession(request);
 
-  if (!session) {
+    if (!session) {
+      return NextResponse.json({
+        authenticated: false
+      });
+    }
+
+    return NextResponse.json(getStudentSessionView(session.userId, session.sessionId));
+  } catch {
     return NextResponse.json({
       authenticated: false
     });
   }
-
-  return NextResponse.json({
-    authenticated: true,
-    userId: session.userId,
-    sessionId: session.sessionId
-  });
 }

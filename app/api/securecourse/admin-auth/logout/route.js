@@ -1,9 +1,9 @@
 import {
   clearSecureCourseAdminSession,
-  fetchSecureCourse,
   readSecureCourseAdminSession,
   secureCourseErrorResponse
 } from "@/lib/securecourse-proxy";
+import { logoutAdmin } from "@/lib/securecourse-store";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,7 @@ export async function POST(request) {
     const adminSession = readSecureCourseAdminSession(request);
 
     if (adminSession?.sessionId) {
-      await fetchSecureCourse("/admin-auth/logout", {
-        method: "POST",
-        headers: {
-          "x-admin-session-id": adminSession.sessionId
-        }
-      });
+      logoutAdmin(adminSession.sessionId);
     }
 
     const response = NextResponse.json({ ok: true });
