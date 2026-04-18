@@ -58,6 +58,26 @@ Services:
 
 The backend container runs `prisma migrate deploy` before `start:prod`.
 
+## Render deployment
+
+The repo root contains [render.yaml](../render.yaml) so the backend can be deployed as a
+separate Render web service from the `backend` directory.
+
+Minimum Render env:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `ADMIN_USERNAME`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `PUBLIC_WEB_URL`
+- `ALLOWED_ORIGINS`
+
+If the public frontend lives on Vercel, set:
+
+- `PUBLIC_WEB_URL=https://your-frontend.vercel.app`
+- `ALLOWED_ORIGINS=https://your-frontend.vercel.app`
+
 ## Windows local fallback without Docker
 
 If Docker Desktop is not installed on the machine yet, use the helper from the workspace root:

@@ -157,7 +157,14 @@ export class SessionsService {
     };
   }
 
-  async revokeSession(sessionId: string, reason: string) {
+  async revokeSession(
+    sessionId: string,
+    reason: string,
+    actor?: {
+      actorId: string;
+      actorType: AuditActorType;
+    }
+  ) {
     const session = await this.prisma.userSession.findUnique({
       where: { id: sessionId }
     });
@@ -187,8 +194,8 @@ export class SessionsService {
     }
 
     await this.auditService.record({
-      actorId: session.userId,
-      actorType: AuditActorType.USER,
+      actorId: actor?.actorId || session.userId,
+      actorType: actor?.actorType || AuditActorType.USER,
       eventType: AuditEventType.SESSION_REVOKED,
       entityType: "user_session",
       entityId: sessionId,

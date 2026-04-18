@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { AuditActorType } from "@prisma/client";
+import { AdminSessionGuard } from "../admin-auth/admin-session.guard";
 import { HeartbeatSessionDto } from "./dto/heartbeat-session.dto";
 import { RevokeSessionDto } from "./dto/revoke-session.dto";
 import { SessionsService } from "./sessions.service";
@@ -8,13 +10,18 @@ export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Get("admin/sessions")
+  @UseGuards(AdminSessionGuard)
   listAdminSessions() {
     return this.sessionsService.listActiveSessions();
   }
 
   @Post("admin/sessions/:sessionId/revoke")
-  revokeSession(@Param("sessionId") sessionId: string, @Body() dto: RevokeSessionDto) {
-    return this.sessionsService.revokeSession(sessionId, dto.reason || "revoked_by_admin");
+  @UseGuards(AdminSessionGuard)
+  revokeSession(@Param("sessionId") sessionId: string, @Body() dto: RevokeSessionDto, @Req() request: any) {
+    return this.sessionsService.revokeSession(sessionId, dto.reason || "revoked_by_admin", {
+      actorId: request.adminUser.id,
+      actorType: AuditActorType.ADMIN
+    });
   }
 
   @Post("session/heartbeat")

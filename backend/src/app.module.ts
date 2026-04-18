@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AccessModule } from "./access/access.module";
+import { AdminAuthModule } from "./admin-auth/admin-auth.module";
 import { AuditModule } from "./audit/audit.module";
 import { CoursesModule } from "./courses/courses.module";
 import { EnrollmentsModule } from "./enrollments/enrollments.module";
@@ -22,6 +23,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     PrismaModule,
     RedisModule,
     HealthModule,
+    AdminAuthModule,
     UsersModule,
     CoursesModule,
     EnrollmentsModule,

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { AdminSessionGuard } from "../admin-auth/admin-session.guard";
 import { CreateSiteLeadDto } from "./dto/create-site-lead.dto";
 import { LeadsService } from "./leads.service";
 
@@ -12,6 +13,7 @@ export class LeadsController {
   }
 
   @Get("admin/leads")
+  @UseGuards(AdminSessionGuard)
   listLeads() {
     return this.leadsService.listLeads();
   }

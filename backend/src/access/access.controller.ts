@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { AdminSessionGuard } from "../admin-auth/admin-session.guard";
 import { ActivateAccessTokenDto } from "./dto/activate-access-token.dto";
 import { IssueAccessTokenDto } from "./dto/issue-access-token.dto";
 import { LogoutDto } from "./dto/logout.dto";
@@ -10,18 +11,24 @@ export class AccessController {
   constructor(private readonly accessService: AccessService) {}
 
   @Get("admin/tokens")
+  @UseGuards(AdminSessionGuard)
   listTokens() {
     return this.accessService.listTokens();
   }
 
   @Post("admin/tokens/issue")
-  issueToken(@Body() dto: IssueAccessTokenDto) {
-    return this.accessService.issueToken(dto);
+  @UseGuards(AdminSessionGuard)
+  issueToken(@Body() dto: IssueAccessTokenDto, @Req() request: any) {
+    return this.accessService.issueToken({
+      ...dto,
+      issuedById: request.adminUser.id
+    });
   }
 
   @Patch("admin/tokens/:tokenId/revoke")
-  revokeToken(@Param("tokenId") tokenId: string, @Body() dto: RevokeAccessTokenDto) {
-    return this.accessService.revokeToken(tokenId, dto.reason);
+  @UseGuards(AdminSessionGuard)
+  revokeToken(@Param("tokenId") tokenId: string, @Body() dto: RevokeAccessTokenDto, @Req() request: any) {
+    return this.accessService.revokeToken(tokenId, dto.reason, request.adminUser.id);
   }
 
   @Post("auth/activate")

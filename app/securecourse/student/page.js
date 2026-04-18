@@ -1,441 +1,496 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  getSecureCourseSession,
+  getStudentCourses,
+  getStudentLesson,
+  heartbeatSession,
+  logoutAccess,
+  requestPlaybackAccess,
+  updateLessonProgress
+} from "@/lib/securecourse-api";
 import s from "../securecourse.module.css";
 
-function formatDuration(seconds) {
-  if (!seconds) return "";
-  const m = Math.floor(seconds / 60);
-  const sec = seconds % 60;
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
+function badgeClass(status) {
+  const normalized = String(status || "").toLowerCase();
 
-// ── Views ──────────────────────────────────────────────
-function ActivateView({ onSuccess }) {
-  const [token, setToken] = useState("");
-  const [status, setStatus] = useState("idle");
-  const [message, setMessage] = useState("");
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setStatus("loading");
-    setMessage("");
-    try {
-      const r = await fetch("/api/securecourse/auth/activate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token.trim() }),
-        credentials: "include",
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) {
-        setStatus("success");
-        setMessage("Доступ открыт!");
-        setTimeout(() => onSuccess(), 800);
-      } else {
-        setStatus("error");
-        setMessage(data.message || "Неверный или истёкший токен.");
-      }
-    } catch {
-      setStatus("error");
-      setMessage("Ошибка сети.");
-    }
+  if (normalized.includes("active") || normalized.includes("ready") || normalized.includes("completed")) {
+    return `${s.badge} ${s.badgeGreen}`;
   }
 
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-      <section className={s.callout} style={{ width: "100%", maxWidth: "480px" }}>
-        <p className={s.surfaceEyebrow}>Добро пожаловать</p>
-        <h2 className={s.calloutTitle}>Введите токен доступа</h2>
-        <p className={s.helperText} style={{ marginBottom: "1.25rem", marginTop: "0.5rem" }}>
-          Токен выдаётся менеджером. После первой активации он сгорает.
-        </p>
-        <form className={s.formStack} onSubmit={handleSubmit}>
-          <label className={s.fieldGroup}>
-            <span className={s.fieldLabel}>Токен доступа</span>
-            <input
-              autoFocus
-              className={s.fieldInput}
-              disabled={status === "loading" || status === "success"}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Вставьте токен здесь"
-              type="text"
-              value={token}
-            />
-          </label>
-          {status === "error" && <div className={s.feedbackError}>{message}</div>}
-          {status === "success" && <div className={s.feedbackSuccess}>{message}</div>}
-          <button
-            className={s.solidButton}
-            disabled={status === "loading" || status === "success" || !token.trim()}
-            style={{ width: "100%", justifyContent: "center" }}
-            type="submit"
-          >
-            {status === "loading" ? "Проверяю…" : "Активировать"}
-          </button>
-        </form>
-        <p className={s.helperText} style={{ marginTop: "1rem" }}>
-          Нет токена? Обратитесь к менеджеру или на{" "}
-          <Link href="/securecourse" style={{ color: "var(--teal)" }}>главную страницу</Link>.
-        </p>
-      </section>
-    </div>
-  );
-}
-
-function CoursesView({ courses, onSelectCourse }) {
-  if (!courses.length) {
-    return (
-      <div className={s.callout}>
-        <p className={s.surfaceEyebrow}>Курсы</p>
-        <h2 className={s.calloutTitle}>Нет активных курсов</h2>
-        <p className={s.helperText}>Обратитесь к менеджеру для зачисления на курс.</p>
-      </div>
-    );
+  if (normalized.includes("used") || normalized.includes("processing") || normalized.includes("waiting")) {
+    return `${s.badge} ${s.badgeBlue}`;
   }
 
-  return (
-    <div>
-      <h2 className={s.surfaceTitle} style={{ marginBottom: "1rem" }}>Мои курсы</h2>
-      <div className={s.courseList}>
-        {courses.map((enrollment) => {
-          const course = enrollment.course || enrollment;
-          const lessons = course.lessons || [];
-          return (
-            <button
-              className={s.courseCard}
-              key={enrollment.id}
-              onClick={() => onSelectCourse(enrollment)}
-              style={{ cursor: "pointer", border: "1px solid var(--line)" }}
-            >
-              <div className={s.courseCardTop}>
-                <strong>{course.title}</strong>
-                <span className={`${s.badge} ${s.badgeGreen}`}>{enrollment.status || "ACTIVE"}</span>
-              </div>
-              <p>{course.shortDescription || "Курс защищённого обучения"}</p>
-              <div className={s.progressTrack}>
-                <div className={s.progressFill} style={{ width: `${enrollment.progress || 0}%` }} />
-              </div>
-              <p style={{ fontSize: "0.8rem", marginTop: "0.5rem", color: "var(--text-muted)" }}>
-                {lessons.length} уроков · {enrollment.progress || 0}% завершено
-              </p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  if (normalized.includes("revoked") || normalized.includes("expired") || normalized.includes("error")) {
+    return `${s.badge} ${s.badgeRed}`;
+  }
+
+  return `${s.badge} ${s.badgeGold}`;
 }
 
-function LessonsView({ enrollment, onSelectLesson, onBack }) {
-  const course = enrollment.course || enrollment;
-  const lessons = course.lessons || [];
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
 
-  return (
-    <div>
-      <button
-        className={s.ghostButton}
-        onClick={onBack}
-        style={{ marginBottom: "1rem" }}
-        type="button"
-      >
-        ← Назад к курсам
-      </button>
-      <div className={s.surface} style={{ marginBottom: "1rem" }}>
-        <div className={s.surfaceHeader}>
-          <div>
-            <p className={s.surfaceEyebrow}>Курс</p>
-            <h2 className={s.surfaceTitle}>{course.title}</h2>
-          </div>
-        </div>
-        {lessons.length === 0 ? (
-          <p className={s.helperText}>Уроки ещё не добавлены.</p>
-        ) : (
-          <div className={s.miniLessonList}>
-            {lessons.map((lesson, i) => (
-              <button
-                className={s.miniLessonItem}
-                key={lesson.id}
-                onClick={() => onSelectLesson(lesson)}
-                style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
-                type="button"
-              >
-                <span className={`${s.lessonMark} ${lesson.progress?.completed ? s.lessonMarkDone : ""}`}>
-                  {lesson.progress?.completed ? "✓" : i + 1}
-                </span>
-                <div>
-                  <div style={{ color: "var(--text)", fontWeight: 600 }}>{lesson.title}</div>
-                  {lesson.duration ? (
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                      {formatDuration(lesson.duration)}
-                    </div>
-                  ) : null}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(date);
 }
 
-function LessonView({ lesson, enrollment, onBack }) {
-  const [playback, setPlayback] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    async function loadPlayback() {
-      setLoading(true);
-      setError("");
-      try {
-        const r = await fetch(`/api/securecourse/student/lessons/${lesson.id}/playback-access`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        });
-        if (r.ok) {
-          const data = await r.json();
-          setPlayback(data);
-        } else if (r.status === 404 || r.status === 400) {
-          setError("Видео ещё не готово или недоступно.");
-        } else {
-          setError("Нет доступа к просмотру.");
-        }
-      } catch {
-        setError("Ошибка загрузки видео.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadPlayback();
-  }, [lesson.id]);
-
-  const materials = lesson.materials || [];
-
-  return (
-    <div>
-      <button className={s.ghostButton} onClick={onBack} style={{ marginBottom: "1rem" }} type="button">
-        ← К списку уроков
-      </button>
-
-      <div className={s.studentStage}>
-        <div>
-          {/* Video area */}
-          <div className={s.videoCanvas}>
-            {loading ? (
-              <div className={s.videoBackdrop}>Загрузка видео…</div>
-            ) : error ? (
-              <div className={s.videoBackdrop} style={{ flexDirection: "column", gap: "0.5rem" }}>
-                <span>🎬</span>
-                <span style={{ fontSize: "0.85rem" }}>{error}</span>
-              </div>
-            ) : playback?.playbackUrl ? (
-              <video
-                controls
-                src={playback.playbackUrl}
-                style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
-              />
-            ) : (
-              <div className={s.videoBackdrop}>
-                <div>
-                  <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🔒</div>
-                  <div>Защищённое видео</div>
-                  <div style={{ fontSize: "0.8rem", marginTop: "0.3rem", opacity: 0.6 }}>
-                    Доступно только в текущей сессии
-                  </div>
-                </div>
-              </div>
-            )}
-            {!loading && !error && (
-              <div className={s.watermark}>
-                <span>Protected</span>
-                <span>{new Date().toLocaleTimeString("ru-RU")}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Lesson info */}
-          <div className={s.lessonMeta} style={{ marginTop: "1rem" }}>
-            <h2 className={s.lessonTitle} style={{ fontSize: "1.4rem" }}>{lesson.title}</h2>
-            {lesson.description && (
-              <p style={{ color: "var(--text-soft)", lineHeight: 1.7 }}>{lesson.description}</p>
-            )}
-          </div>
-
-          {/* Materials */}
-          {materials.length > 0 && (
-            <div className={s.callout} style={{ marginTop: "1rem" }}>
-              <p className={s.surfaceEyebrow}>Материалы урока</p>
-              <ul className={s.materialList} style={{ marginTop: "0.75rem" }}>
-                {materials.map((m) => (
-                  <li key={m.id}>
-                    <a
-                      href={m.url || "#"}
-                      rel="noreferrer"
-                      style={{ color: "var(--teal)" }}
-                      target="_blank"
-                    >
-                      {m.title || m.type}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <aside>
-          <div className={s.callout}>
-            <p className={s.surfaceEyebrow}>Текущий курс</p>
-            <h3 style={{ margin: "0.4rem 0 0", color: "var(--text)", fontSize: "1rem" }}>
-              {enrollment?.course?.title || "Курс"}
-            </h3>
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────
-export default function StudentCabinet() {
-  const [view, setView] = useState("loading"); // loading | activate | courses | lessons | lesson
-  const [sessionData, setSessionData] = useState(null);
+export default function SecureCourseStudentPage() {
+  const [session, setSession] = useState({
+    checking: true,
+    authenticated: false,
+    userId: "",
+    sessionId: ""
+  });
   const [courses, setCourses] = useState([]);
-  const [selectedEnrollment, setSelectedEnrollment] = useState(null);
-  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
+  const [lessonState, setLessonState] = useState({
+    loading: false,
+    lesson: null,
+    enrollment: null,
+    progress: null,
+    playback: null,
+    error: ""
+  });
   const [error, setError] = useState("");
-
-  // Check session on mount
-  useEffect(() => {
-    async function checkSession() {
-      try {
-        const r = await fetch("/api/securecourse/auth/session", { credentials: "include" });
-        if (r.ok) {
-          const data = await r.json();
-          setSessionData(data);
-          await loadCourses();
-          setView("courses");
-        } else {
-          setView("activate");
-        }
-      } catch {
-        setView("activate");
-      }
-    }
-    checkSession();
-  }, []);
+  const [notice, setNotice] = useState("");
+  const [busyAction, setBusyAction] = useState("");
 
   async function loadCourses() {
+    const payload = await getStudentCourses();
+    setCourses(payload);
+    return payload;
+  }
+
+  async function hydrateSession() {
+    setError("");
+
     try {
-      const r = await fetch("/api/securecourse/student/courses", { credentials: "include" });
-      if (r.ok) {
-        const data = await r.json();
-        setCourses(Array.isArray(data) ? data : data.enrollments || []);
+      const payload = await getSecureCourseSession();
+
+      if (!payload.authenticated) {
+        setSession({
+          checking: false,
+          authenticated: false,
+          userId: "",
+          sessionId: ""
+        });
+        setCourses([]);
+        return;
       }
-    } catch {
-      setError("Не удалось загрузить курсы.");
+
+      setSession({
+        checking: false,
+        authenticated: true,
+        userId: payload.userId,
+        sessionId: payload.sessionId
+      });
+
+      await loadCourses();
+    } catch (requestError) {
+      setSession({
+        checking: false,
+        authenticated: false,
+        userId: "",
+        sessionId: ""
+      });
+      setError(requestError.message || "Не удалось проверить сессию ученика.");
+    }
+  }
+
+  useEffect(() => {
+    hydrateSession();
+  }, []);
+
+  useEffect(() => {
+    if (!session.authenticated) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      heartbeatSession().catch(() => undefined);
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, [session.authenticated]);
+
+  useEffect(() => {
+    if (!selectedEnrollmentId && courses[0]?.id) {
+      setSelectedEnrollmentId(courses[0].id);
+    }
+  }, [courses, selectedEnrollmentId]);
+
+  const selectedEnrollment = useMemo(
+    () => courses.find((item) => item.id === selectedEnrollmentId) || null,
+    [courses, selectedEnrollmentId]
+  );
+
+  const selectedCourse = selectedEnrollment?.course || null;
+  const lessons = selectedCourse?.lessons || [];
+
+  async function handleOpenLesson(lessonId) {
+    setLessonState({
+      loading: true,
+      lesson: null,
+      enrollment: null,
+      progress: null,
+      playback: null,
+      error: ""
+    });
+    setNotice("");
+    setError("");
+
+    try {
+      const lessonPayload = await getStudentLesson(lessonId);
+      let playbackPayload = null;
+      let playbackError = "";
+
+      try {
+        playbackPayload = await requestPlaybackAccess(lessonId);
+      } catch (playbackRequestError) {
+        playbackError =
+          playbackRequestError.message || "Видео пока не готово или недоступно для текущей сессии.";
+      }
+
+      setLessonState({
+        loading: false,
+        lesson: lessonPayload.lesson,
+        enrollment: lessonPayload.enrollment,
+        progress: lessonPayload.progress,
+        playback: playbackPayload?.playback || null,
+        error: playbackError
+      });
+    } catch (requestError) {
+      setLessonState({
+        loading: false,
+        lesson: null,
+        enrollment: null,
+        progress: null,
+        playback: null,
+        error: requestError.message || "Не удалось загрузить урок."
+      });
+    }
+  }
+
+  async function handleMarkCompleted() {
+    if (!lessonState.lesson) {
+      return;
+    }
+
+    setBusyAction("complete-lesson");
+    setError("");
+    setNotice("");
+
+    try {
+      await updateLessonProgress(lessonState.lesson.id, {
+        progressPercent: 100,
+        completed: true,
+        lastPositionSeconds: lessonState.progress?.lastPositionSeconds || 0
+      });
+      setNotice("Прогресс обновлен. Урок отмечен как завершенный.");
+      await loadCourses();
+      await handleOpenLesson(lessonState.lesson.id);
+    } catch (requestError) {
+      setError(requestError.message || "Не удалось обновить прогресс.");
+    } finally {
+      setBusyAction("");
     }
   }
 
   async function handleLogout() {
+    setBusyAction("logout");
+    setError("");
+    setNotice("");
+
     try {
-      await fetch("/api/securecourse/auth/logout", { method: "POST", credentials: "include" });
-    } finally {
-      setView("activate");
-      setSessionData(null);
+      await logoutAccess();
+      setSession({
+        checking: false,
+        authenticated: false,
+        userId: "",
+        sessionId: ""
+      });
       setCourses([]);
+      setSelectedEnrollmentId("");
+      setLessonState({
+        loading: false,
+        lesson: null,
+        enrollment: null,
+        progress: null,
+        playback: null,
+        error: ""
+      });
+    } catch (requestError) {
+      setError(requestError.message || "Не удалось завершить сессию.");
+    } finally {
+      setBusyAction("");
     }
   }
 
-  if (view === "loading") {
+  if (session.checking) {
     return (
-      <main className={`${s.page} ${s.mobilePage}`}>
-        <div className={s.mobileShell}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-            <p style={{ color: "var(--text-soft)" }}>Загрузка…</p>
-          </div>
+      <main className={s.page}>
+        <div className={s.ambient} aria-hidden="true" />
+        <div className={s.shell}>
+          <section className={s.callout}>
+            <p className={s.surfaceEyebrow}>Проверка доступа</p>
+            <h1 className={s.calloutTitle}>Проверяем активную сессию ученика</h1>
+            <p className={s.helperText}>Если токен уже активирован, кабинет откроется автоматически.</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session.authenticated) {
+    return (
+      <main className={s.page}>
+        <div className={s.ambient} aria-hidden="true" />
+        <div className={s.shell}>
+          <section className={s.callout}>
+            <p className={s.surfaceEyebrow}>Token-only student access</p>
+            <h1 className={s.calloutTitle}>Сначала активируйте одноразовый токен</h1>
+            <p className={s.helperText}>
+              У учеников нет обычной регистрации и пароля. Доступ выдается менеджером через
+              одноразовый токен на публичной странице.
+            </p>
+            {error ? <p className={s.feedbackError}>{error}</p> : null}
+            <div className={s.calloutActions}>
+              <Link className={s.solidButton} href="/securecourse">
+                Перейти к активации токена
+              </Link>
+              <Link className={s.outlineButton} href="/securecourse/admin/login">
+                Войти как администратор
+              </Link>
+            </div>
+          </section>
         </div>
       </main>
     );
   }
 
   return (
-    <main className={`${s.page} ${s.mobilePage}`}>
+    <main className={s.page}>
       <div className={s.ambient} aria-hidden="true" />
-      <div className={s.mobileShell}>
-
-        {/* ─── TOPBAR ─── */}
-        <header className={s.mobileTopbar}>
-          <Link className={s.brand} href="/securecourse" style={{ textDecoration: "none" }}>
-            <span className={s.brandMark}>SC</span>
-            <span>
-              <strong>SecureCourse</strong>
-              <small>Кабинет ученика</small>
-            </span>
-          </Link>
-          <div className={s.topnavActions}>
-            {sessionData && (
-              <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                {sessionData.user?.email || sessionData.email || ""}
-              </span>
-            )}
-            {view !== "activate" && (
-              <button className={s.outlineButton} onClick={handleLogout} type="button">
-                Выйти
+      <div className={s.shell}>
+        <section className={s.surface}>
+          <div className={s.surfaceHeader}>
+            <div>
+              <p className={s.surfaceEyebrow}>Кабинет ученика</p>
+              <h1 className={s.surfaceTitle}>Доступ открыт только в рамках текущей активной сессии</h1>
+            </div>
+            <div className={s.calloutActions}>
+              <Link className={s.outlineButton} href="/securecourse">
+                Активировать другой токен
+              </Link>
+              <button
+                className={s.solidButton}
+                disabled={busyAction === "logout"}
+                onClick={handleLogout}
+                type="button"
+              >
+                {busyAction === "logout" ? "Завершаю..." : "Выйти"}
               </button>
-            )}
-            <Link className={s.ghostButton} href="/securecourse/admin">Админка</Link>
+            </div>
           </div>
-        </header>
 
-        {/* ─── CONTENT ─── */}
-        <div style={{ marginTop: "1.5rem" }}>
-          {error && <div className={s.feedbackError} style={{ marginBottom: "1rem" }}>{error}</div>}
+          <div className={s.compactList}>
+            <span>User ID: {session.userId}</span>
+            <span>Session ID: {session.sessionId}</span>
+            <span>Heartbeat: каждые 60 секунд</span>
+          </div>
 
-          {view === "activate" && (
-            <ActivateView
-              onSuccess={async () => {
-                await loadCourses();
-                setView("courses");
-              }}
-            />
-          )}
+          {error ? <p className={s.feedbackError}>{error}</p> : null}
+          {notice ? <p className={s.feedbackSuccess}>{notice}</p> : null}
+        </section>
 
-          {view === "courses" && (
-            <CoursesView
-              courses={courses}
-              onSelectCourse={(enrollment) => {
-                setSelectedEnrollment(enrollment);
-                setView("lessons");
-              }}
-            />
-          )}
+        <section
+          className={s.section}
+          style={{ display: "grid", gridTemplateColumns: "1.05fr 1.15fr", gap: "1.25rem", padding: 0 }}
+        >
+          <div className={s.surface}>
+            <div className={s.surfaceHeader}>
+              <div>
+                <p className={s.surfaceEyebrow}>Назначенные курсы</p>
+                <h2 className={s.surfaceTitle}>Выберите курс и урок</h2>
+              </div>
+            </div>
 
-          {view === "lessons" && selectedEnrollment && (
-            <LessonsView
-              enrollment={selectedEnrollment}
-              onBack={() => setView("courses")}
-              onSelectLesson={(lesson) => {
-                setSelectedLesson(lesson);
-                setView("lesson");
-              }}
-            />
-          )}
+            {!courses.length ? (
+              <p className={s.helperText}>Пока нет активных назначений. Обратитесь к менеджеру.</p>
+            ) : (
+              <div className={s.compactList}>
+                {courses.map((enrollment) => (
+                  <button
+                    key={enrollment.id}
+                    className={selectedEnrollmentId === enrollment.id ? s.solidButton : s.outlineButton}
+                    onClick={() => {
+                      setSelectedEnrollmentId(enrollment.id);
+                      setLessonState({
+                        loading: false,
+                        lesson: null,
+                        enrollment: null,
+                        progress: null,
+                        playback: null,
+                        error: ""
+                      });
+                    }}
+                    style={{ justifyContent: "space-between" }}
+                    type="button"
+                  >
+                    <span>{enrollment.course.title}</span>
+                    <span className={badgeClass(enrollment.status)}>{enrollment.status}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {view === "lesson" && selectedLesson && (
-            <LessonView
-              enrollment={selectedEnrollment}
-              lesson={selectedLesson}
-              onBack={() => setView("lessons")}
-            />
-          )}
-        </div>
+            {selectedCourse ? (
+              <div style={{ marginTop: "1.25rem" }}>
+                <p className={s.helperText} style={{ marginBottom: "0.75rem" }}>
+                  {selectedCourse.shortDescription || "Курс без краткого описания."}
+                </p>
+                <div className={s.compactList}>
+                  {lessons.map((lesson) => (
+                    <button
+                      key={lesson.id}
+                      className={
+                        lessonState.lesson?.id === lesson.id ? s.solidButton : s.ghostButton
+                      }
+                      onClick={() => handleOpenLesson(lesson.id)}
+                      style={{ justifyContent: "space-between" }}
+                      type="button"
+                    >
+                      <span>{lesson.title}</span>
+                      <span className={badgeClass(lesson.status)}>{lesson.status}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
 
+          <div className={s.surface}>
+            <div className={s.surfaceHeader}>
+              <div>
+                <p className={s.surfaceEyebrow}>Урок</p>
+                <h2 className={s.surfaceTitle}>
+                  {lessonState.lesson ? lessonState.lesson.title : "Выберите урок из назначенного курса"}
+                </h2>
+              </div>
+            </div>
+
+            {lessonState.loading ? (
+              <p className={s.helperText}>Загружаем детали урока и playback access...</p>
+            ) : lessonState.lesson ? (
+              <div className={s.compactList}>
+                <span>Курс: {lessonState.lesson.course.title}</span>
+                <span>Статус урока: {lessonState.lesson.status}</span>
+                <span>Прогресс: {lessonState.progress?.progressPercent ?? 0}%</span>
+                <span>Последний просмотр: {formatDateTime(lessonState.progress?.lastWatchedAt)}</span>
+              </div>
+            ) : (
+              <p className={s.helperText}>
+                Здесь появится видео, материалы и прогресс после выбора урока.
+              </p>
+            )}
+
+            {lessonState.lesson ? (
+              <div style={{ marginTop: "1rem", display: "grid", gap: "1rem" }}>
+                <div
+                  style={{
+                    border: "1px solid var(--card-border)",
+                    borderRadius: "var(--radius-lg)",
+                    overflow: "hidden",
+                    minHeight: "18rem",
+                    background: "rgba(0, 0, 0, 0.5)",
+                    boxShadow: "inset 0 0 20px rgba(0,0,0,0.8)"
+                  }}
+                >
+                  {lessonState.playback?.manifestUrl ? (
+                    <video
+                      controls
+                      src={lessonState.playback.manifestUrl}
+                      style={{ width: "100%", height: "100%", minHeight: "18rem", display: "block" }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        minHeight: "18rem",
+                        display: "grid",
+                        placeItems: "center",
+                        padding: "1.5rem",
+                        color: "var(--text-soft)",
+                        textAlign: "center"
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "1.1rem", color: "#fff" }}>Защищенное видео</strong>
+                        <p style={{ marginTop: "0.6rem" }}>
+                          {lessonState.error || "Для этого урока еще нет готового playback access."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className={s.callout}>
+                  <p className={s.surfaceEyebrow}>Материалы урока</p>
+                  {lessonState.lesson.materials.length ? (
+                    <div className={s.compactList}>
+                      {lessonState.lesson.materials.map((material) => (
+                        <div
+                          key={material.id}
+                          style={{
+                            padding: "1rem",
+                            border: "1px solid var(--card-border)",
+                            borderRadius: "var(--radius-md)",
+                            background: "rgba(0,0,0,0.2)"
+                          }}
+                        >
+                          <strong>{material.title}</strong>
+                          <p style={{ margin: "0.35rem 0 0", color: "var(--text-soft)" }}>
+                            {material.type}
+                            {material.url ? ` · ${material.url}` : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={s.helperText}>Дополнительные материалы пока не добавлены.</p>
+                  )}
+                </div>
+
+                <div className={s.calloutActions}>
+                  <button
+                    className={s.solidButton}
+                    disabled={busyAction === "complete-lesson"}
+                    onClick={handleMarkCompleted}
+                    type="button"
+                  >
+                    {busyAction === "complete-lesson" ? "Сохраняю..." : "Отметить урок завершенным"}
+                  </button>
+                  <span className={s.helperText}>
+                    Playback access выдается только после проверки enrollment и активной сессии.
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
       </div>
     </main>
   );

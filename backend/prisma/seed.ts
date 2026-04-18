@@ -1,5 +1,6 @@
 import { AccessTokenStatus, AccessTokenType, AuditEventType, CourseStatus, LessonStatus, MaterialType, PrismaClient, Role, SessionStatus, UserStatus, VideoAssetStatus, VideoProvider } from "@prisma/client";
 import { createHash } from "crypto";
+import { hashPassword } from "../src/common/utils/hash.util";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -14,19 +15,26 @@ async function main() {
   const now = new Date();
   const idleMinutes = Number(process.env.SESSION_IDLE_MINUTES || 15);
   const idleExpiresAt = new Date(now.getTime() + idleMinutes * 60 * 1000);
+  const bootstrapAdminEmail = process.env.ADMIN_EMAIL || "admin@securecourse.local";
+  const bootstrapAdminUsername = process.env.ADMIN_USERNAME || "admin";
+  const bootstrapAdminPassword = process.env.ADMIN_PASSWORD || "admin123";
 
   const admin = await prisma.user.upsert({
-    where: { email: "admin@securecourse.local" },
+    where: { email: bootstrapAdminEmail },
     update: {
+      username: bootstrapAdminUsername,
       fullName: "SecureCourse Admin",
       role: Role.ADMIN,
-      status: UserStatus.ACTIVE
+      status: UserStatus.ACTIVE,
+      passwordHash: hashPassword(bootstrapAdminPassword)
     },
     create: {
-      email: "admin@securecourse.local",
+      email: bootstrapAdminEmail,
+      username: bootstrapAdminUsername,
       fullName: "SecureCourse Admin",
       role: Role.ADMIN,
-      status: UserStatus.ACTIVE
+      status: UserStatus.ACTIVE,
+      passwordHash: hashPassword(bootstrapAdminPassword)
     }
   });
 
@@ -241,7 +249,9 @@ async function main() {
     JSON.stringify(
       {
         admin: {
-          email: admin.email
+          email: admin.email,
+          username: admin.username,
+          password: bootstrapAdminPassword
         },
         student: {
           email: student.email,

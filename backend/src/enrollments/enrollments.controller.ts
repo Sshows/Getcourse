@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { AdminSessionGuard } from "../admin-auth/admin-session.guard";
 import { CreateEnrollmentDto } from "./dto/create-enrollment.dto";
 import { RevokeEnrollmentDto } from "./dto/revoke-enrollment.dto";
 import { EnrollmentsService } from "./enrollments.service";
 
 @Controller("admin/enrollments")
+@UseGuards(AdminSessionGuard)
 export class EnrollmentsController {
   constructor(private readonly enrollmentsService: EnrollmentsService) {}
 

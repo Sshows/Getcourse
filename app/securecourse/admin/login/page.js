@@ -2,110 +2,110 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { loginAdmin } from "@/lib/securecourse-api";
 import styles from "../../securecourse.module.css";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState("idle");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const redirectTo = searchParams.get("redirectTo") || "/securecourse/admin";
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setStatus("loading");
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setLoading(true);
     setError("");
 
     try {
-      const endpoint = isLogin ? "/api/admin/login" : "/api/admin/register";
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+      await loginAdmin({
+        login,
+        password
       });
 
-      if (response.ok) {
-        window.location.href = redirectTo;
-      } else {
-        setStatus("error");
-        const data = await response.json().catch(() => ({}));
-        setError(data.error || "Ошибка аутентификации");
-      }
-    } catch {
-      setStatus("error");
-      setError("Ошибка соединения");
+      window.location.assign(redirectTo);
+    } catch (requestError) {
+      setError(requestError.message || "Admin login failed.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <section className={styles.callout} style={{ width: "100%", maxWidth: "420px" }}>
-        <p className={styles.surfaceEyebrow}>ВХОД ДЛЯ МЕНЕДЖЕРА</p>
-        <h1 className={styles.calloutTitle} style={{ marginBottom: "1.5rem" }}>
-          {isLogin ? "Админ-панель" : "Регистрация"}
-        </h1>
+    <section className={styles.callout} style={{ width: "100%", maxWidth: "440px" }}>
+      <p className={styles.surfaceEyebrow}>Admin Auth</p>
+      <h1 className={styles.calloutTitle} style={{ marginBottom: "1rem" }}>
+        Sign in to SecureCourse admin
+      </h1>
+      <p className={styles.helperText} style={{ marginBottom: "1.2rem" }}>
+        This page is only for `ADMIN` and `MANAGER` users. Students never register or sign in with a password.
+      </p>
 
-        <form className={styles.formStack} onSubmit={handleSubmit}>
-          <label className={styles.fieldGroup}>
-            <span className={styles.fieldLabel}>Email (логин)</span>
-            <input
-              className={styles.fieldInput}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="manager@example.com"
-              required
-              type="text"
-              value={username}
-            />
-          </label>
+      <form className={styles.formStack} onSubmit={handleSubmit}>
+        <label className={styles.fieldGroup}>
+          <span className={styles.fieldLabel}>Admin email or username</span>
+          <input
+            className={styles.fieldInput}
+            onChange={(event) => setLogin(event.target.value)}
+            placeholder="admin or admin@securecourse.local"
+            required
+            type="text"
+            value={login}
+          />
+        </label>
 
-          <label className={styles.fieldGroup}>
-            <span className={styles.fieldLabel}>Пароль</span>
-            <input
-              className={styles.fieldInput}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Введите пароль..."
-              required
-              type="password"
-              value={password}
-            />
-          </label>
+        <label className={styles.fieldGroup}>
+          <span className={styles.fieldLabel}>Password</span>
+          <input
+            className={styles.fieldInput}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Enter admin password"
+            required
+            type="password"
+            value={password}
+          />
+        </label>
 
-          {status === "error" && <div className={styles.feedbackError}>{error}</div>}
+        {error ? <div className={styles.feedbackError}>{error}</div> : null}
 
-          <button
-            className={styles.solidButton}
-            disabled={status === "loading" || !username || !password}
-            style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}
-            type="submit"
-          >
-            {status === "loading" ? "Подождите..." : isLogin ? "Войти" : "Зарегистрироваться"}
-          </button>
-        </form>
+        <button
+          className={styles.solidButton}
+          disabled={loading || !login || !password}
+          style={{ width: "100%", justifyContent: "center" }}
+          type="submit"
+        >
+          {loading ? "Signing in..." : "Open admin panel"}
+        </button>
+      </form>
 
-        <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
-          <button 
-            className={styles.ghostButton} 
-            onClick={() => { setIsLogin(!isLogin); setStatus("idle"); setError(""); }}
-            type="button"
-          >
-            {isLogin ? "Создать аккаунт администратора" : "Уже есть аккаунт? Войти"}
-          </button>
-        </div>
-      </section>
-    </div>
+      <ul className={styles.ruleList} style={{ marginTop: "1.25rem" }}>
+        <li>Bootstrap admin credentials live in the backend env.</li>
+        <li>Set `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` for local runtime or Render.</li>
+        <li>Set `SECURECOURSE_API_URL` in the frontend env so Vercel can reach the public NestJS backend.</li>
+        <li>The browser stores only an HTTP-only admin session cookie.</li>
+      </ul>
+    </section>
   );
 }
 
-export default function SecureCourseAdminLogin() {
+export default function SecureCourseAdminLoginPage() {
   return (
     <main className={styles.page}>
       <div className={styles.ambient} aria-hidden="true" />
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          width: "min(100% - 2rem, 78rem)",
+          margin: "0 auto"
+        }}
+      >
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
+      </div>
     </main>
   );
 }

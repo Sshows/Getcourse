@@ -84,7 +84,7 @@ export class AccessService {
     };
   }
 
-  async revokeToken(tokenId: string, reason?: string) {
+  async revokeToken(tokenId: string, reason?: string, revokedById?: string) {
     const token = await this.prisma.accessToken.findUnique({
       where: { id: tokenId }
     });
@@ -103,8 +103,8 @@ export class AccessService {
     });
 
     await this.auditService.record({
-      actorId: token.userId,
-      actorType: AuditActorType.USER,
+      actorId: revokedById || token.userId,
+      actorType: revokedById ? AuditActorType.ADMIN : AuditActorType.USER,
       eventType: AuditEventType.ACCESS_TOKEN_REVOKED,
       entityType: "access_token",
       entityId: tokenId,

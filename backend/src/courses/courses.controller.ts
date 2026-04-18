@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { AdminSessionGuard } from "../admin-auth/admin-session.guard";
 import { CreateCourseDto } from "./dto/create-course.dto";
 import { CreateLessonMaterialDto } from "./dto/create-lesson-material.dto";
 import { CreateLessonDto } from "./dto/create-lesson.dto";
 import { CoursesService } from "./courses.service";
 
 @Controller("admin")
+@UseGuards(AdminSessionGuard)
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 

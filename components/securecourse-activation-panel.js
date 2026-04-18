@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   activateAccess,
   getSecureCourseSession,
@@ -10,6 +11,7 @@ import {
 import styles from "@/app/securecourse/securecourse.module.css";
 
 export default function SecureCourseActivationPanel() {
+  const router = useRouter();
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +49,7 @@ export default function SecureCourseActivationPanel() {
         sessionId: payload.session.id
       });
       setToken("");
+      router.push("/securecourse/student");
     } catch (requestError) {
       setError(requestError.message || "Activation failed.");
     } finally {
@@ -73,22 +76,23 @@ export default function SecureCourseActivationPanel() {
     <section className={styles.surface} id="activate" data-reveal>
       <div className={styles.surfaceHeader}>
         <div>
-          <p className={styles.surfaceEyebrow}>Token activation</p>
-          <h2 className={styles.surfaceTitle}>Turn a one-time token into one active session</h2>
+          <p className={styles.surfaceEyebrow}>Активация ученического доступа</p>
+          <h2 className={styles.surfaceTitle}>Один токен открывает одну активную сессию</h2>
         </div>
-        <p className={styles.surfaceMeta}>
-          This form talks to Next.js BFF routes, not directly to NestJS.
+        <p className={styles.helperText} style={{ maxWidth: "400px" }}>
+          У ученика нет обычной регистрации. Менеджер выдает одноразовый токен, а backend
+          превращает его в активную сессию только после успешной проверки.
         </p>
       </div>
 
-      <div className={styles.activationGrid}>
+      <div style={{ display: "grid", gap: "3rem", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", padding: "2.5rem" }}>
         <form className={styles.formStack} onSubmit={handleActivate}>
           <label className={styles.fieldGroup}>
-            <span className={styles.fieldLabel}>One-time token</span>
+            <span className={styles.fieldLabel}>Одноразовый токен</span>
             <input
               className={styles.fieldInput}
               onChange={(event) => setToken(event.target.value)}
-              placeholder="Paste token from admin panel"
+              placeholder="Вставьте токен из админки"
               required
               type="text"
               value={token}
@@ -97,11 +101,11 @@ export default function SecureCourseActivationPanel() {
 
           <div className={styles.calloutActions}>
             <button className={styles.solidButton} disabled={loading} type="submit">
-              {loading ? "Activating..." : "Activate access"}
+              {loading ? "Активирую..." : "Активировать доступ"}
             </button>
             {session.authenticated ? (
               <button className={styles.outlineButton} onClick={handleLogout} type="button">
-                Logout current session
+                Завершить текущую сессию
               </button>
             ) : null}
           </div>
@@ -109,16 +113,15 @@ export default function SecureCourseActivationPanel() {
           {error ? <p className={styles.feedbackError}>{error}</p> : null}
 
           <p className={styles.helperText}>
-            After successful activation the Next.js auth route stores `userId` and `sessionId`
-            in secure HTTP-only cookies. Student pages then use those cookies to proxy protected
-            requests into NestJS.
+            После активации браузер получает только защищенные HTTP-only cookies. Обычный
+            student password flow здесь не используется.
           </p>
         </form>
 
         <div className={styles.callout}>
-          <p className={styles.surfaceEyebrow}>Current state</p>
+          <p className={styles.surfaceEyebrow}>Текущее состояние</p>
           <h3 className={styles.calloutTitle}>
-            {session.authenticated ? "Session is active" : "No student session yet"}
+            {session.authenticated ? "Сессия ученика активна" : "Сессия еще не открыта"}
           </h3>
 
           {activation ? (
@@ -136,16 +139,16 @@ export default function SecureCourseActivationPanel() {
             </div>
           ) : (
             <p className={styles.helperText}>
-              Issue a token from the admin panel first, then come back here to activate it.
+              Сначала выпустите токен в админке, затем вернитесь сюда и активируйте его.
             </p>
           )}
 
           <div className={styles.calloutActions}>
             <Link className={styles.solidButton} href="/securecourse/student">
-              Open student cabinet
+              Открыть кабинет ученика
             </Link>
             <Link className={styles.outlineButton} href="/securecourse/admin">
-              Return to admin
+              Вернуться в админку
             </Link>
           </div>
         </div>

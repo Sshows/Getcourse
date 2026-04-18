@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   createCourse,
@@ -8,6 +8,7 @@ import {
   createUser,
   getDashboardSnapshot,
   issueToken,
+  logoutAdmin,
   revokeSession,
   revokeToken
 } from "@/lib/securecourse-api";
@@ -27,12 +28,7 @@ function badgeClass(value) {
     return styles.badgeGreen;
   }
 
-  if (
-    normalized.includes("used") ||
-    normalized.includes("processing") ||
-    normalized.includes("expiring") ||
-    normalized.includes("waiting")
-  ) {
+  if (normalized.includes("used") || normalized.includes("processing") || normalized.includes("waiting")) {
     return styles.badgeBlue;
   }
 
@@ -44,9 +40,16 @@ function badgeClass(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return "-";
+  if (!value) {
+    return "-";
+  }
+
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
   return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "short",
     timeStyle: "short"
@@ -66,28 +69,55 @@ export default function SecureCourseAdminPage() {
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [copiedToken, setCopiedToken] = useState("");
   const [lastIssuedToken, setLastIssuedToken] = useState(null);
-  
   const [data, setData] = useState({
-    metrics: { activeSessions: 0, issuedTokensToday: 0, readyVideoAssets: 0, totalUsers: 0 },
-    users: [], courses: [], tokens: [], sessions: [], uploads: [], logs: []
+    metrics: {
+      activeSessions: 0,
+      issuedTokensToday: 0,
+      readyVideoAssets: 0,
+      totalUsers: 0
+    },
+    users: [],
+    courses: [],
+    tokens: [],
+    sessions: [],
+    uploads: [],
+    logs: []
   });
-
   const [forms, setForms] = useState({
-    createUser: { fullName: "", email: "" },
-    createCourse: { title: "", slug: "", shortDescription: "" },
-    enrollment: { userId: "", courseId: "" },
-    token: { enrollmentId: "" }
+    createUser: {
+      fullName: "",
+      email: ""
+    },
+    createCourse: {
+      title: "",
+      slug: "",
+      shortDescription: ""
+    },
+    enrollment: {
+      userId: "",
+      courseId: ""
+    },
+    token: {
+      enrollmentId: ""
+    }
   });
 
   async function loadAdminData() {
     setLoading(true);
     setError("");
+
     try {
       const snapshot = await getDashboardSnapshot();
       setData(snapshot);
     } catch (requestError) {
-      setError(requestError.message || "Ошибка загрузки данных админ-панели.");
+      if (requestError.status === 401) {
+        window.location.assign("/securecourse/admin/login?redirectTo=/securecourse/admin");
+        return;
+      }
+
+      setError(requestError.message || "Failed to load admin dashboard.");
     } finally {
       setLoading(false);
     }
@@ -97,41 +127,56 @@ export default function SecureCourseAdminPage() {
     loadAdminData();
   }, []);
 
-  const activeEnrollments = data.users.flatMap((user) =>
-    (user.enrollments || [])
-      .filter((enrollment) => enrollment.status === "ACTIVE")
-      .map((enrollment) => ({
-        ...enrollment,
-        user
-      }))
+  const activeEnrollments = useMemo(
+    () =>
+      data.users.flatMap((user) =>
+        (user.enrollments || [])
+          .filter((enrollment) => enrollment.status === "ACTIVE")
+          .map((enrollment) => ({
+            ...enrollment,
+            user
+          }))
+      ),
+    [data.users]
   );
 
-  // Pre-fill selects safely
   useEffect(() => {
     if (!forms.enrollment.userId && data.users[0]?.id) {
       updateForm("enrollment", "userId", data.users[0].id);
     }
+
     if (!forms.enrollment.courseId && data.courses[0]?.id) {
       updateForm("enrollment", "courseId", data.courses[0].id);
     }
+
     if (!forms.token.enrollmentId && activeEnrollments[0]?.id) {
       updateForm("token", "enrollmentId", activeEnrollments[0].id);
     }
-  }, [activeEnrollments, data.courses, data.users]);
+  }, [
+    activeEnrollments,
+    data.courses,
+    data.users,
+    forms.enrollment.courseId,
+    forms.enrollment.userId,
+    forms.token.enrollmentId
+  ]);
 
   function updateForm(section, field, value) {
     setForms((current) => ({
       ...current,
-      [section]: { ...current[section], [field]: value }
+      [section]: {
+        ...current[section],
+        [field]: value
+      }
     }));
   }
-
-  // --- ACTIONS ---
 
   async function handleCreateUser(event) {
     event.preventDefault();
     setBusyAction("create-user");
-    setError(""); setNotice("");
+    setError("");
+    setNotice("");
+
     try {
       await createUser({
         email: forms.createUser.email,
@@ -139,11 +184,18 @@ export default function SecureCourseAdminPage() {
         role: "STUDENT",
         status: "ACTIVE"
       });
-      setForms((current) => ({ ...current, createUser: { fullName: "", email: "" } }));
-      setNotice("Ученик успешно создан. Теперь зачислите его на курс.");
+
+      setForms((current) => ({
+        ...current,
+        createUser: {
+          fullName: "",
+          email: ""
+        }
+      }));
+      setNotice("Student created. Next step: enroll the student into a course.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка создания ученика.");
+      setError(requestError.message || "Failed to create student.");
     } finally {
       setBusyAction("");
     }
@@ -152,7 +204,9 @@ export default function SecureCourseAdminPage() {
   async function handleCreateCourse(event) {
     event.preventDefault();
     setBusyAction("create-course");
-    setError(""); setNotice("");
+    setError("");
+    setNotice("");
+
     try {
       const slug = forms.createCourse.slug || slugify(forms.createCourse.title);
       await createCourse({
@@ -162,11 +216,19 @@ export default function SecureCourseAdminPage() {
         description: forms.createCourse.shortDescription,
         status: "PUBLISHED"
       });
-      setForms((current) => ({ ...current, createCourse: { title: "", slug: "", shortDescription: "" } }));
-      setNotice("Новый курс успешно опубликован.");
+
+      setForms((current) => ({
+        ...current,
+        createCourse: {
+          title: "",
+          slug: "",
+          shortDescription: ""
+        }
+      }));
+      setNotice("Course created and published.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка создания курса.");
+      setError(requestError.message || "Failed to create course.");
     } finally {
       setBusyAction("");
     }
@@ -175,17 +237,20 @@ export default function SecureCourseAdminPage() {
   async function handleCreateEnrollment(event) {
     event.preventDefault();
     setBusyAction("create-enrollment");
-    setError(""); setNotice("");
+    setError("");
+    setNotice("");
+
     try {
       await createEnrollment({
         userId: forms.enrollment.userId,
         courseId: forms.enrollment.courseId,
-        note: "Назначено менеджером"
+        note: "Assigned by manager from admin panel"
       });
-      setNotice("Ученик зачислен на курс. Теперь можно выдать ему токен доступа.");
+
+      setNotice("Enrollment created. The student can now receive a one-time token.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка зачисления ученика.");
+      setError(requestError.message || "Failed to create enrollment.");
     } finally {
       setBusyAction("");
     }
@@ -194,57 +259,90 @@ export default function SecureCourseAdminPage() {
   async function handleIssueToken(event) {
     event.preventDefault();
     setBusyAction("issue-token");
-    setError(""); setNotice("");
+    setError("");
+    setNotice("");
+
     try {
       const enrollment = activeEnrollments.find((item) => item.id === forms.token.enrollmentId);
-      if (!enrollment) throw new Error("Выберите активное зачисление.");
+
+      if (!enrollment) {
+        throw new Error("Choose an active enrollment first.");
+      }
 
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
         activationExpiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-        note: "Выдано менеджером"
+        note: "Issued from SecureCourse admin panel"
       });
 
       setLastIssuedToken({
+        id: issued.id,
         token: issued.token,
         userEmail: enrollment.user.email,
         courseTitle: enrollment.course.title,
         expiresAt: issued.activationExpiresAt
       });
-      setNotice("Одноразовый токен успешно сгенерирован.");
+      setCopiedToken("");
+      setNotice("One-time token issued. Give it to the student and they can activate access on the public page.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка генерации токена.");
+      setError(requestError.message || "Failed to issue token.");
     } finally {
       setBusyAction("");
     }
   }
 
+  async function handleCopyToken(rawToken) {
+    try {
+      await navigator.clipboard.writeText(rawToken);
+      setCopiedToken(rawToken);
+      setNotice("Token copied. Students use this token on the public activation page.");
+    } catch {
+      setError("Copy failed. Please copy the token manually.");
+    }
+  }
+
   async function handleRevokeToken(tokenId) {
     setBusyAction(`revoke-token-${tokenId}`);
-    setError(""); setNotice("");
+    setError("");
+    setNotice("");
+
     try {
-      await revokeToken(tokenId, "Отозван менеджером");
-      setNotice("Токен успешно отозван.");
+      await revokeToken(tokenId, "revoked_by_manager");
+      setNotice("Token revoked.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка отзыва токена.");
+      setError(requestError.message || "Failed to revoke token.");
     } finally {
       setBusyAction("");
     }
   }
 
   async function handleRevokeSession(sessionId) {
-    setBusyAction(`revoke-${sessionId}`);
-    setError(""); setNotice("");
+    setBusyAction(`revoke-session-${sessionId}`);
+    setError("");
+    setNotice("");
+
     try {
-      await revokeSession(sessionId, "Отозвана менеджером");
-      setNotice("Сессия успешно закрыта.");
+      await revokeSession(sessionId, "revoked_by_manager");
+      setNotice("Student session revoked.");
       await loadAdminData();
     } catch (requestError) {
-      setError(requestError.message || "Ошибка закрытия сессии.");
+      setError(requestError.message || "Failed to revoke session.");
     } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function handleAdminLogout() {
+    setBusyAction("logout-admin");
+
+    try {
+      await logoutAdmin();
+      window.location.assign("/securecourse/admin/login");
+    } catch (requestError) {
+      setError(requestError.message || "Failed to logout admin.");
       setBusyAction("");
     }
   }
@@ -252,57 +350,63 @@ export default function SecureCourseAdminPage() {
   const usersById = Object.fromEntries(data.users.map((user) => [user.id, user]));
 
   if (loading) {
-    return <main className={styles.page}>Загрузка панели управления...</main>;
+    return <main className={styles.page}>Loading SecureCourse admin...</main>;
   }
 
   return (
     <main className={`${styles.page} ${styles.workspacePage}`}>
       <div className={styles.workspaceShell}>
-        
-        {/* Панель навигации (слева) */}
         <aside className={styles.sidebar}>
           <Link className={styles.brand} href="/securecourse">
             <span className={styles.brandMark}>SC</span>
             <span>
               <strong>SecureCourse</strong>
-              <small>Управление доступом</small>
+              <small>Admin control room</small>
             </span>
           </Link>
 
           <div className={styles.sidebarSection}>
-            <p className={styles.sidebarLabel}>Разделы</p>
-            <div className={`${styles.sidebarLink} ${styles.sidebarLinkActive}`}>
-              <span>Дашборд</span>
-              <span className={styles.sidebarDot} aria-hidden="true" />
-            </div>
-            <a className={styles.sidebarLink} href="#tokens">Токены</a>
-            <a className={styles.sidebarLink} href="#users">Пользователи</a>
-            <a className={styles.sidebarLink} href="#courses">Курсы</a>
-            <a className={styles.sidebarLink} href="#sessions">Сессии</a>
+            <p className={styles.sidebarLabel}>Navigation</p>
+            <a className={styles.sidebarLink} href="#tokens">Tokens</a>
+            <a className={styles.sidebarLink} href="#users">Students</a>
+            <a className={styles.sidebarLink} href="#courses">Courses</a>
+            <a className={styles.sidebarLink} href="#sessions">Sessions</a>
+            <a className={styles.sidebarLink} href="#logs">Logs</a>
+          </div>
+
+          <div className={styles.sidebarSection}>
+            <p className={styles.sidebarLabel}>Access rules</p>
+            <ul className={styles.sidebarList}>
+              <li>Admins sign in with login and password</li>
+              <li>Students never register with a password</li>
+              <li>Students only activate one-time tokens</li>
+              <li>One active student session is enforced server-side</li>
+            </ul>
           </div>
         </aside>
 
-        {/* Главная рабочая область */}
         <div className={styles.adminMain}>
           <header className={styles.workspaceTopbar} data-reveal>
             <div>
-              <p className={styles.sectionKicker}>Панель администратора</p>
-              <h1 className={styles.workspaceTitle}>Дашборд</h1>
-              <p className={styles.workspaceText}>Управление базой учеников, безопасными токенами и сессиями.</p>
+              <p className={styles.sectionKicker}>Admin dashboard</p>
+              <h1 className={styles.workspaceTitle}>Token-first student access</h1>
+              <p className={styles.workspaceText}>
+                Admins authenticate with password-based backend sessions. Students do not have normal
+                login and only enter through one-time tokens.
+              </p>
             </div>
+
             <div className={styles.workspaceActions}>
               <button className={styles.outlineButton} onClick={loadAdminData} type="button">
-                Обновить данные
+                Refresh
               </button>
               <button
                 className={styles.ghostButton}
-                onClick={async () => {
-                  await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
-                  window.location.href = "/securecourse/admin/login";
-                }}
+                disabled={busyAction === "logout-admin"}
+                onClick={handleAdminLogout}
                 type="button"
               >
-                Выйти
+                {busyAction === "logout-admin" ? "Signing out..." : "Logout admin"}
               </button>
             </div>
           </header>
@@ -311,28 +415,35 @@ export default function SecureCourseAdminPage() {
           {notice ? <div className={styles.feedbackSuccess}>{notice}</div> : null}
 
           {lastIssuedToken ? (
-            <section className={styles.feedbackCard} style={{ backgroundColor: 'rgba(56, 194, 178, 0.05)' }} data-reveal>
-              <p className={styles.surfaceEyebrow}>Успешно сгенерировано</p>
-              <h2 className={styles.surfaceTitle}>Вручите этот токен ученику</h2>
-              <div className={styles.tokenCard} style={{ marginTop: '0.5rem' }}>
-                <span className={styles.tokenLabel}>Токен доступа (одноразовый)</span>
+            <section className={styles.feedbackCard} data-reveal>
+              <p className={styles.surfaceEyebrow}>Latest issued token</p>
+              <h2 className={styles.surfaceTitle}>Give this token to the student</h2>
+              <div className={styles.tokenCard}>
+                <span className={styles.tokenLabel}>One-time token</span>
                 <code>{lastIssuedToken.token}</code>
               </div>
-              <p className={styles.helperText} style={{ marginTop: '0.8rem' }}>
-                Пользователь: <strong>{lastIssuedToken.userEmail}</strong> | Курс: <strong>{lastIssuedToken.courseTitle}</strong>
+              <p className={styles.helperText}>
+                Student: <strong>{lastIssuedToken.userEmail}</strong> | Course:{" "}
+                <strong>{lastIssuedToken.courseTitle}</strong>
               </p>
-              <p className={styles.helperText} style={{ opacity: 0.7 }}>
-                Сгорит после первой активации. Активен до: {formatDateTime(lastIssuedToken.expiresAt)}
-              </p>
+              <div className={styles.calloutActions}>
+                <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
+                  {copiedToken === lastIssuedToken.token ? "Copied" : "Copy token"}
+                </button>
+                <Link className={styles.outlineButton} href="/securecourse#activate">
+                  Open activation page
+                </Link>
+              </div>
+              <p className={styles.helperText}>Expires at {formatDateTime(lastIssuedToken.expiresAt)}</p>
             </section>
           ) : null}
 
           <section className={styles.metricGrid}>
             {[
-              { label: "Активных сессий", value: String(data.metrics.activeSessions), tone: "green" },
-              { label: "Токенов выдано", value: String(data.metrics.issuedTokensToday), tone: "blue" },
-              { label: "Видео загружено", value: String(data.metrics.readyVideoAssets), tone: "gold" },
-              { label: "Всего учеников", value: String(data.metrics.totalUsers), tone: "gold" }
+              { label: "Active sessions", value: String(data.metrics.activeSessions), tone: "green" },
+              { label: "Issued tokens today", value: String(data.metrics.issuedTokensToday), tone: "blue" },
+              { label: "Ready video assets", value: String(data.metrics.readyVideoAssets), tone: "gold" },
+              { label: "Total users", value: String(data.metrics.totalUsers), tone: "gold" }
             ].map((metric) => (
               <article className={styles.statCard} key={metric.label} data-reveal>
                 <span className={styles.statLabel}>{metric.label}</span>
@@ -341,151 +452,201 @@ export default function SecureCourseAdminPage() {
             ))}
           </section>
 
-          {/* Рабочий процесс (формы слева, списки справа или в колонках) */}
-          <div className={styles.adminColumns} style={{ gridTemplateColumns: "320px minmax(0, 1fr)" }}>
-            
-            {/* Формы быстрого действия */}
+          <div className={styles.adminColumns}>
             <aside className={styles.adminRail}>
               <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Шаг 1</p>
-                <h2 className={styles.calloutTitle}>Создать ученика</h2>
-                <form className={styles.formStack} onSubmit={handleCreateUser} style={{ marginTop: '1rem' }}>
+                <p className={styles.surfaceEyebrow}>Step 1</p>
+                <h2 className={styles.calloutTitle}>Create student</h2>
+                <form className={styles.formStack} onSubmit={handleCreateUser}>
                   <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>ФИО</span>
-                    <input className={styles.fieldInput} required type="text"
-                      value={forms.createUser.fullName} onChange={(e) => updateForm("createUser", "fullName", e.target.value)} />
+                    <span className={styles.fieldLabel}>Full name</span>
+                    <input
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
+                      required
+                      type="text"
+                      value={forms.createUser.fullName}
+                    />
                   </label>
                   <label className={styles.fieldGroup}>
                     <span className={styles.fieldLabel}>Email</span>
-                    <input className={styles.fieldInput} required type="email"
-                      value={forms.createUser.email} onChange={(e) => updateForm("createUser", "email", e.target.value)} />
+                    <input
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("createUser", "email", event.target.value)}
+                      required
+                      type="email"
+                      value={forms.createUser.email}
+                    />
                   </label>
-                  <button className={styles.outlineButton} type="submit" disabled={busyAction === "create-user"}>Создать пользователя</button>
+                  <button className={styles.outlineButton} disabled={busyAction === "create-user"} type="submit">
+                    {busyAction === "create-user" ? "Creating..." : "Create student"}
+                  </button>
                 </form>
               </section>
 
               <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Шаг 2</p>
-                <h2 className={styles.calloutTitle}>Зачислить (Enroll)</h2>
-                <form className={styles.formStack} onSubmit={handleCreateEnrollment} style={{ marginTop: '1rem' }}>
+                <p className={styles.surfaceEyebrow}>Step 2</p>
+                <h2 className={styles.calloutTitle}>Create course</h2>
+                <form className={styles.formStack} onSubmit={handleCreateCourse}>
                   <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Ученик</span>
-                    <select className={styles.fieldInput} required value={forms.enrollment.userId} onChange={(e) => updateForm("enrollment", "userId", e.target.value)}>
-                      {data.users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
-                    </select>
+                    <span className={styles.fieldLabel}>Course title</span>
+                    <input
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("createCourse", "title", event.target.value)}
+                      required
+                      type="text"
+                      value={forms.createCourse.title}
+                    />
                   </label>
                   <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Курс</span>
-                    <select className={styles.fieldInput} required value={forms.enrollment.courseId} onChange={(e) => updateForm("enrollment", "courseId", e.target.value)}>
-                      {data.courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                    </select>
+                    <span className={styles.fieldLabel}>Slug</span>
+                    <input
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
+                      type="text"
+                      value={forms.createCourse.slug}
+                    />
                   </label>
-                  <button className={styles.outlineButton} type="submit" disabled={!data.users.length || !data.courses.length}>Открыть доступ</button>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Short description</span>
+                    <input
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
+                      type="text"
+                      value={forms.createCourse.shortDescription}
+                    />
+                  </label>
+                  <button className={styles.outlineButton} disabled={busyAction === "create-course"} type="submit">
+                    {busyAction === "create-course" ? "Creating..." : "Create course"}
+                  </button>
                 </form>
               </section>
 
               <section className={styles.callout} data-reveal>
-                <p className={styles.surfaceEyebrow}>Шаг 3</p>
-                <h2 className={styles.calloutTitle}>Сгенерировать токен</h2>
-                <p className={styles.helperText} style={{ marginBottom: "1rem" }}>Для ученика, уже добавленного на курс.</p>
-                <form className={styles.formStack} onSubmit={handleIssueToken}>
+                <p className={styles.surfaceEyebrow}>Step 3</p>
+                <h2 className={styles.calloutTitle}>Enroll student</h2>
+                <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
                   <label className={styles.fieldGroup}>
-                    <span className={styles.fieldLabel}>Активное зачисление</span>
-                    <select className={styles.fieldInput} required value={forms.token.enrollmentId} onChange={(e) => updateForm("token", "enrollmentId", e.target.value)}>
-                      {activeEnrollments.map((enr) => (
-                        <option key={enr.id} value={enr.id}>{enr.user.email} → {enr.course.title}</option>
+                    <span className={styles.fieldLabel}>Student</span>
+                    <select
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
+                      value={forms.enrollment.userId}
+                    >
+                      {data.users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.fullName} - {user.email}
+                        </option>
                       ))}
                     </select>
                   </label>
-                  <button className={styles.solidButton} type="submit" disabled={!activeEnrollments.length}>Сгенерировать</button>
-                 </form>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Course</span>
+                    <select
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
+                      value={forms.enrollment.courseId}
+                    >
+                      {data.courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className={styles.outlineButton}
+                    disabled={busyAction === "create-enrollment" || !data.users.length || !data.courses.length}
+                    type="submit"
+                  >
+                    {busyAction === "create-enrollment" ? "Enrolling..." : "Create enrollment"}
+                  </button>
+                </form>
               </section>
 
               <section className={styles.callout} data-reveal>
-                 <p className={styles.surfaceEyebrow}>Дополнительно</p>
-                 <h2 className={styles.calloutTitle}>Загрузить видео</h2>
-                 <form className={styles.formStack} onSubmit={async (e) => {
-                    e.preventDefault();
-                    const lessonId = forms.video?.lessonId;
-                    const file = document.getElementById("videoFileInput").files[0];
-                    if (!lessonId || !file) return;
-                    setBusyAction("upload-video");
-                    setError(""); setNotice("");
-                    try {
-                       const intent = await import("@/lib/securecourse-api").then(m => m.createUploadIntent({
-                          lessonId: lessonId,
-                          fileName: file.name,
-                          mimeType: file.type,
-                          sizeBytes: file.size
-                       }));
-                       if (intent.uploadUrl) {
-                          await fetch(intent.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-                       } else {
-                          setError("Ошибка: отсутвует uploadUrl. Заглушка бэкенда?");
-                       }
-                       setNotice("Видео успешно залито.");
-                       document.getElementById("videoFileInput").value = "";
-                       await loadAdminData();
-                    } catch (e) {
-                       setError(e.message || "Ошибка загрузки видео");
-                    } finally {
-                       setBusyAction("");
-                    }
-                 }} style={{ marginTop: '1rem' }}>
-                    <label className={styles.fieldGroup}>
-                       <span className={styles.fieldLabel}>Урок</span>
-                       <select className={styles.fieldInput} required value={forms.video?.lessonId || ""} onChange={(e) => updateForm("video", "lessonId", e.target.value)}>
-                          <option value="">Выберите урок...</option>
-                          {data.courses.flatMap(c => c.lessons || []).map(l => (
-                             <option key={l.id} value={l.id}>{l.title}</option>
-                          ))}
-                       </select>
-                    </label>
-                    <label className={styles.fieldGroup}>
-                       <span className={styles.fieldLabel}>Файл видео</span>
-                       <input id="videoFileInput" className={styles.fieldInput} required type="file" accept="video/mp4,video/x-m4v,video/*" />
-                    </label>
-                    <button className={styles.outlineButton} type="submit" disabled={busyAction === "upload-video"}>
-                       {busyAction === "upload-video" ? "Загрузка..." : "Загрузить"}
-                    </button>
-                 </form>
+                <p className={styles.surfaceEyebrow}>Step 4</p>
+                <h2 className={styles.calloutTitle}>Generate one-time token</h2>
+                <form className={styles.formStack} onSubmit={handleIssueToken}>
+                  <label className={styles.fieldGroup}>
+                    <span className={styles.fieldLabel}>Active enrollment</span>
+                    <select
+                      className={styles.fieldInput}
+                      onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
+                      value={forms.token.enrollmentId}
+                    >
+                      {activeEnrollments.map((enrollment) => (
+                        <option key={enrollment.id} value={enrollment.id}>
+                          {enrollment.user.email} - {enrollment.course.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className={styles.solidButton}
+                    disabled={busyAction === "issue-token" || !activeEnrollments.length}
+                    type="submit"
+                  >
+                    {busyAction === "issue-token" ? "Issuing..." : "Issue token"}
+                  </button>
+                  <p className={styles.helperText}>
+                    Students do not use password login. They only activate tokens on the public page.
+                  </p>
+                </form>
               </section>
             </aside>
 
-            {/* Таблицы данных */}
             <div className={styles.workspaceBody}>
-              
-              <section id="tokens" className={styles.surface} data-reveal>
+              <section className={styles.surface} data-reveal id="tokens">
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <p className={styles.surfaceEyebrow}>Контроль доступа</p>
-                    <h2 className={styles.surfaceTitle}>Одноразовые токены</h2>
+                    <p className={styles.surfaceEyebrow}>Tokens</p>
+                    <h2 className={styles.surfaceTitle}>One-time student access</h2>
                   </div>
+                  <p className={styles.surfaceMeta}>Statuses: ISSUED, USED, REVOKED, EXPIRED.</p>
                 </div>
+
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th>Токен</th>
-                        <th>Кому выдан</th>
-                        <th>Создан</th>
-                        <th>Статус</th>
-                        <th>Действия</th>
+                        <th>Token record</th>
+                        <th>Student</th>
+                        <th>Course</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.tokens.length === 0 ? (
-                        <tr><td className={styles.emptyState} colSpan={5}>Нет выданных токенов.</td></tr>
+                        <tr>
+                          <td className={styles.emptyState} colSpan={6}>No tokens yet.</td>
+                        </tr>
                       ) : (
                         data.tokens.map((token) => (
                           <tr key={token.id}>
                             <td><code className={styles.codePill}>{token.id}</code></td>
                             <td>{token.user?.email || "-"}</td>
+                            <td>{token.enrollment?.course?.title || "-"}</td>
                             <td>{formatDateTime(token.createdAt)}</td>
-                            <td><span className={`${styles.badge} ${badgeClass(token.status)}`}>{token.status}</span></td>
                             <td>
-                              {token.status === "ISSUED" && (
-                                <button className={styles.tableActionButton} onClick={() => handleRevokeToken(token.id)} type="button">Отзыв</button>
+                              <span className={`${styles.badge} ${badgeClass(token.status)}`}>
+                                {token.status}
+                              </span>
+                            </td>
+                            <td>
+                              {token.status === "ISSUED" ? (
+                                <button
+                                  className={styles.tableActionButton}
+                                  disabled={busyAction === `revoke-token-${token.id}`}
+                                  onClick={() => handleRevokeToken(token.id)}
+                                  type="button"
+                                >
+                                  {busyAction === `revoke-token-${token.id}` ? "Revoking..." : "Revoke"}
+                                </button>
+                              ) : (
+                                "-"
                               )}
                             </td>
                           </tr>
@@ -496,73 +657,61 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
-              <section id="sessions" className={styles.surface} data-reveal>
+              <section className={styles.surface} data-reveal id="users">
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <p className={styles.surfaceEyebrow}>Безопасность</p>
-                    <h2 className={styles.surfaceTitle}>Активные сессии</h2>
+                    <p className={styles.surfaceEyebrow}>Students</p>
+                    <h2 className={styles.surfaceTitle}>User directory</h2>
                   </div>
+                  <p className={styles.surfaceMeta}>Students are created by admins. No public registration.</p>
                 </div>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Ученик</th>
-                        <th>Устройство/IP</th>
-                        <th>Последняя активность</th>
-                        <th>Статус</th>
-                        <th>Удалить</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.sessions.length === 0 ? (
-                        <tr><td className={styles.emptyState} colSpan={5}>Не найдено сессий.</td></tr>
-                      ) : (
-                        data.sessions.map((session) => (
-                          <tr key={session.id}>
-                            <td>{session.user?.email || "-"}</td>
-                            <td>{session.deviceLabel || "Неизвестное"}<br/><span className={styles.helperText}>{session.ipAddress}</span></td>
-                            <td>{formatDateTime(session.lastSeenAt)}</td>
-                            <td><span className={`${styles.badge} ${badgeClass(session.status)}`}>{session.status}</span></td>
-                            <td>
-                               {session.status === "ACTIVE" && (
-                                  <button className={styles.tableActionButton} onClick={() => handleRevokeSession(session.id)} type="button">Закрыть</button>
-                               )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
 
-              <section id="users" className={styles.surface} data-reveal>
-                <div className={styles.surfaceHeader}>
-                  <div>
-                    <h2 className={styles.surfaceTitle}>Пользователи в системе</h2>
-                  </div>
-                </div>
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th>ФИО и Email</th>
-                        <th>Курсы</th>
-                        <th>Текущая сессия</th>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Courses</th>
+                        <th>Status</th>
+                        <th>Current session</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.users.length === 0 ? (
-                        <tr><td className={styles.emptyState} colSpan={3}>Нет учеников.</td></tr>
+                        <tr>
+                          <td className={styles.emptyState} colSpan={5}>No users yet.</td>
+                        </tr>
                       ) : (
                         data.users.map((user) => {
-                          const session = data.sessions.find((item) => item.userId === user.id && item.status === "ACTIVE");
+                          const session = data.sessions.find(
+                            (item) => item.userId === user.id && item.status === "ACTIVE"
+                          );
+
                           return (
                             <tr key={user.id}>
-                              <td><strong>{user.fullName}</strong><div className={styles.helperText}>{user.email}</div></td>
-                              <td>{user.enrollments?.map((enr) => enr.course.title).join(", ") || "-"}</td>
-                              <td>{session ? <span style={{ color: 'var(--teal)' }}>Онлайн</span> : <span>Офлайн</span>}</td>
+                              <td>
+                                <strong>{user.fullName}</strong>
+                                <div className={styles.helperText}>{user.email}</div>
+                              </td>
+                              <td>{user.role}</td>
+                              <td>
+                                {user.enrollments?.length ? (
+                                  <div className={styles.compactList}>
+                                    {user.enrollments.map((enrollment) => (
+                                      <span key={enrollment.id}>{enrollment.course.title}</span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td>
+                                <span className={`${styles.badge} ${badgeClass(user.status)}`}>
+                                  {user.status}
+                                </span>
+                              </td>
+                              <td>{session ? session.deviceLabel || session.deviceId || "Active" : "No active session"}</td>
                             </tr>
                           );
                         })
@@ -572,30 +721,44 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
-              <section id="courses" className={styles.surface} data-reveal>
+              <section className={styles.surface} data-reveal id="courses">
                 <div className={styles.surfaceHeader}>
                   <div>
-                    <h2 className={styles.surfaceTitle}>Курсы</h2>
+                    <p className={styles.surfaceEyebrow}>Courses</p>
+                    <h2 className={styles.surfaceTitle}>Published catalog</h2>
                   </div>
+                  <p className={styles.surfaceMeta}>Admin-managed course structure.</p>
                 </div>
-                <form className={styles.formStack} onSubmit={handleCreateCourse} style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-                    <input className={styles.fieldInput} placeholder="Название нового курса..." required value={forms.createCourse.title} onChange={(e) => updateForm("createCourse", "title", e.target.value)} />
-                    <button className={styles.outlineButton} type="submit" disabled={busyAction === "create-course"} style={{ whiteSpace: "nowrap" }}>+ Добавить</button>
-                </form>
+
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
-                      <tr><th>Курс</th><th>Уроков</th><th>Учеников</th></tr>
+                      <tr>
+                        <th>Course</th>
+                        <th>Lessons</th>
+                        <th>Enrollments</th>
+                        <th>Status</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {data.courses.length === 0 ? (
-                        <tr><td className={styles.emptyState} colSpan={3}>Нет курсов.</td></tr>
+                        <tr>
+                          <td className={styles.emptyState} colSpan={4}>No courses yet.</td>
+                        </tr>
                       ) : (
                         data.courses.map((course) => (
                           <tr key={course.id}>
-                            <td><strong>{course.title}</strong></td>
+                            <td>
+                              <strong>{course.title}</strong>
+                              <div className={styles.helperText}>{course.slug}</div>
+                            </td>
                             <td>{course.lessons?.length || 0}</td>
                             <td>{course.enrollments?.length || 0}</td>
+                            <td>
+                              <span className={`${styles.badge} ${badgeClass(course.status)}`}>
+                                {course.status}
+                              </span>
+                            </td>
                           </tr>
                         ))
                       )}
@@ -604,6 +767,111 @@ export default function SecureCourseAdminPage() {
                 </div>
               </section>
 
+              <section className={styles.surface} data-reveal id="sessions">
+                <div className={styles.surfaceHeader}>
+                  <div>
+                    <p className={styles.surfaceEyebrow}>Sessions</p>
+                    <h2 className={styles.surfaceTitle}>Single active student session</h2>
+                  </div>
+                  <p className={styles.surfaceMeta}>Managers can revoke active student sessions.</p>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Device</th>
+                        <th>IP</th>
+                        <th>Started</th>
+                        <th>Last activity</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.sessions.length === 0 ? (
+                        <tr>
+                          <td className={styles.emptyState} colSpan={7}>No active sessions.</td>
+                        </tr>
+                      ) : (
+                        data.sessions.map((session) => (
+                          <tr key={session.id}>
+                            <td>{session.user?.email || "-"}</td>
+                            <td>{session.deviceLabel || session.deviceId || "Unknown device"}</td>
+                            <td>{session.ipAddress || "-"}</td>
+                            <td>{formatDateTime(session.createdAt)}</td>
+                            <td>{formatDateTime(session.lastSeenAt)}</td>
+                            <td>
+                              <span className={`${styles.badge} ${badgeClass(session.status)}`}>
+                                {session.status}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className={styles.tableActionButton}
+                                disabled={busyAction === `revoke-session-${session.id}`}
+                                onClick={() => handleRevokeSession(session.id)}
+                                type="button"
+                              >
+                                {busyAction === `revoke-session-${session.id}` ? "Revoking..." : "Revoke"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className={styles.surface} data-reveal id="logs">
+                <div className={styles.surfaceHeader}>
+                  <div>
+                    <p className={styles.surfaceEyebrow}>Audit</p>
+                    <h2 className={styles.surfaceTitle}>Critical events</h2>
+                  </div>
+                  <p className={styles.surfaceMeta}>Login, token activation, playback, logout and revocations.</p>
+                </div>
+
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>Actor</th>
+                        <th>Entity</th>
+                        <th>Session</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.logs.length === 0 ? (
+                        <tr>
+                          <td className={styles.emptyState} colSpan={5}>No audit logs yet.</td>
+                        </tr>
+                      ) : (
+                        data.logs.map((log) => (
+                          <tr key={log.id}>
+                            <td>{formatDateTime(log.createdAt)}</td>
+                            <td>{log.eventType}</td>
+                            <td>
+                              {log.actorId
+                                ? usersById[log.actorId]?.email || usersById[log.actorId]?.fullName || log.actorId
+                                : log.actorType}
+                            </td>
+                            <td>
+                              {log.entityType}
+                              {log.entityId ? ` / ${log.entityId}` : ""}
+                            </td>
+                            <td>{log.sessionId || "-"}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
           </div>
         </div>
