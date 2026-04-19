@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { loginAdmin } from "@/lib/securecourse-api";
 import styles from "../../securecourse.module.css";
 
