@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  activateAccess,
-  getSecureCourseSession,
-  logoutAccess
-} from "@/lib/securecourse-api";
+import { activateAccess, getSecureCourseSession, logoutAccess } from "@/lib/securecourse-api";
 import styles from "@/app/securecourse/securecourse.module.css";
 
 export default function SecureCourseActivationPanel() {
@@ -15,16 +11,32 @@ export default function SecureCourseActivationPanel() {
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [activation, setActivation] = useState(null);
   const [session, setSession] = useState({
-    authenticated: false
+    authenticated: false,
+    user: null,
+    userId: "",
+    sessionId: ""
   });
 
   useEffect(() => {
     getSecureCourseSession()
-      .then((payload) => setSession(payload))
+      .then((payload) =>
+        setSession({
+          authenticated: payload.authenticated,
+          user: payload.user || null,
+          userId: payload.userId || "",
+          sessionId: payload.sessionId || ""
+        })
+      )
       .catch(() => {
-        setSession({ authenticated: false });
+        setSession({
+          authenticated: false,
+          user: null,
+          userId: "",
+          sessionId: ""
+        });
       });
   }, []);
 
@@ -32,23 +44,26 @@ export default function SecureCourseActivationPanel() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
 
     try {
       const payload = await activateAccess({
         token,
-        deviceId: "securecourse-web-preview",
-        deviceFingerprint: "securecourse-web-preview",
-        deviceLabel: "SecureCourse Web Activation",
+        deviceId: "securecourse-web",
+        deviceFingerprint: "securecourse-web",
+        deviceLabel: "Web browser",
         userAgent: typeof window !== "undefined" ? window.navigator.userAgent : "browser"
       });
 
       setActivation(payload);
       setSession({
         authenticated: true,
+        user: payload.user,
         userId: payload.user.id,
         sessionId: payload.session.id
       });
       setToken("");
+      setNotice("Access activated. Redirecting to the student cabinet.");
       router.push("/securecourse/student");
     } catch (requestError) {
       setError(requestError.message || "Activation failed.");
@@ -60,11 +75,18 @@ export default function SecureCourseActivationPanel() {
   async function handleLogout() {
     setLoading(true);
     setError("");
+    setNotice("");
 
     try {
       await logoutAccess();
       setActivation(null);
-      setSession({ authenticated: false });
+      setSession({
+        authenticated: false,
+        user: null,
+        userId: "",
+        sessionId: ""
+      });
+      setNotice("The current student session has been closed.");
     } catch (requestError) {
       setError(requestError.message || "Logout failed.");
     } finally {
@@ -73,55 +95,56 @@ export default function SecureCourseActivationPanel() {
   }
 
   return (
-    <section className={styles.surface} id="activate" data-reveal>
+    <section className={styles.surface} id="activation">
       <div className={styles.surfaceHeader}>
         <div>
-          <p className={styles.surfaceEyebrow}>Активация ученического доступа</p>
-          <h2 className={styles.surfaceTitle}>Один токен открывает одну активную сессию</h2>
+          <p className={styles.surfaceEyebrow}>Token activation</p>
+          <h2 className={styles.surfaceTitle}>Paste the one-time token to open student access.</h2>
         </div>
-        <p className={styles.helperText} style={{ maxWidth: "400px" }}>
-          У ученика нет обычной регистрации. Менеджер выдает одноразовый токен, а backend
-          превращает его в активную сессию только после успешной проверки.
+        <p className={styles.helperText} style={{ maxWidth: "34rem", color: "var(--text-soft)" }}>
+          Students do not sign up with email and password. A manager creates the student, enrolls them, issues a
+          one-time token, and the token opens exactly one active session.
         </p>
       </div>
 
-      <div style={{ display: "grid", gap: "3rem", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", padding: "2.5rem" }}>
+      <div className={styles.gridTwo} style={{ padding: "2rem" }}>
         <form className={styles.formStack} onSubmit={handleActivate}>
           <label className={styles.fieldGroup}>
-            <span className={styles.fieldLabel}>Одноразовый токен</span>
+            <span className={styles.fieldLabel}>One-time token</span>
             <input
               className={styles.fieldInput}
               onChange={(event) => setToken(event.target.value)}
-              placeholder="Вставьте токен из админки"
+              placeholder="Paste the token from the admin panel"
               required
               type="text"
               value={token}
             />
           </label>
 
-          <div className={styles.calloutActions}>
-            <button className={styles.solidButton} disabled={loading} type="submit">
-              {loading ? "Активирую..." : "Активировать доступ"}
+          <div className={styles.heroActions}>
+            <button className={styles.solidButton} disabled={loading || !token} type="submit">
+              {loading ? "Activating..." : "Activate access"}
             </button>
             {session.authenticated ? (
               <button className={styles.outlineButton} onClick={handleLogout} type="button">
-                Завершить текущую сессию
+                End current session
               </button>
             ) : null}
           </div>
 
           {error ? <p className={styles.feedbackError}>{error}</p> : null}
+          {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
           <p className={styles.helperText}>
-            После активации браузер получает только защищенные HTTP-only cookies. Обычный
-            student password flow здесь не используется.
+            The token becomes `USED` after successful activation. To enter again after logout, the student needs a new
+            token from the manager.
           </p>
         </form>
 
         <div className={styles.callout}>
-          <p className={styles.surfaceEyebrow}>Текущее состояние</p>
+          <p className={styles.surfaceEyebrow}>Current state</p>
           <h3 className={styles.calloutTitle}>
-            {session.authenticated ? "Сессия ученика активна" : "Сессия еще не открыта"}
+            {session.authenticated ? "A student session is active" : "No active student session yet"}
           </h3>
 
           {activation ? (
@@ -131,24 +154,26 @@ export default function SecureCourseActivationPanel() {
               </span>
               <span>{activation.user.email}</span>
               <span>Session ID: {activation.session.id}</span>
+              <span>Course: {activation.enrollment.course?.title || "Assigned course"}</span>
             </div>
           ) : session.authenticated ? (
             <div className={styles.compactList}>
+              <span>{session.user?.fullName || "Student session"}</span>
               <span>User ID: {session.userId}</span>
               <span>Session ID: {session.sessionId}</span>
             </div>
           ) : (
             <p className={styles.helperText}>
-              Сначала выпустите токен в админке, затем вернитесь сюда и активируйте его.
+              Start in the admin panel: create a student, assign a course, generate a token, and send it to the student.
             </p>
           )}
 
-          <div className={styles.calloutActions}>
+          <div className={styles.heroActions}>
             <Link className={styles.solidButton} href="/securecourse/student">
-              Открыть кабинет ученика
+              Open student cabinet
             </Link>
-            <Link className={styles.outlineButton} href="/securecourse/admin">
-              Вернуться в админку
+            <Link className={styles.outlineButton} href="/securecourse/admin/login">
+              Open admin panel
             </Link>
           </div>
         </div>

@@ -2,53 +2,40 @@ import Link from "next/link";
 import SecureCourseActivationPanel from "@/components/securecourse-activation-panel";
 import s from "./securecourse.module.css";
 
-const FEATURES = [
+const PRODUCT_PILLARS = [
   {
-    title: "Одноразовые токены доступа",
+    title: "English language tracks",
     description:
-      "Менеджер выдает токен конкретному ученику. После первой активации токен переходит в USED и больше не работает."
+      "Structured video lessons for IELTS, academic writing, speaking practice, and vocabulary for international study."
   },
   {
-    title: "Одна активная сессия",
+    title: "Study abroad roadmap",
     description:
-      "Backend контролирует только одну активную сессию на ученика. Новый вход заменяет или блокирует предыдущую сессию по правилам безопасности."
+      "Courses for university selection, application strategy, deadlines, and scholarship preparation."
   },
   {
-    title: "Защищенный video pipeline",
+    title: "Token-only student access",
     description:
-      "Видео не попадает в Git и не хранится в коде. Админ создает upload intent, файл уходит напрямую в Mux или Cloudflare Stream, а ученик получает только playback access."
-  },
-  {
-    title: "Полный аудит действий",
-    description:
-      "Логируются входы админов, выпуск и отзыв токенов, активация доступа, сессии, просмотр уроков и webhook-события видеопровайдера."
+      "Students do not create accounts. A manager issues a one-time token, the token activates one session, and the old token is burned."
   }
 ];
 
-const INTERFACES = [
-  {
-    title: "Публичный сайт",
-    description:
-      "Точка входа для лендинга, заявки, активации токена и объяснения, что ученикам не нужен обычный логин и пароль."
-  },
-  {
-    title: "Веб-админка",
-    description:
-      "Рабочее место ADMIN и MANAGER: ученики, курсы, назначения, токены, сессии, аудит и загрузка видео."
-  },
-  {
-    title: "Временный student web cabinet",
-    description:
-      "Тестовая защищенная среда для MVP, чтобы проверить весь поток до отдельного мобильного приложения."
-  }
+const ADMIN_FLOW = [
+  "Create a student profile in the admin panel.",
+  "Create a course for English or admissions coaching.",
+  "Add a lesson and notes for that course.",
+  "Enroll the student into the course.",
+  "Generate a one-time token and copy it immediately.",
+  "Upload the lesson video with Upload video.",
+  "Send the token to the student in WhatsApp, Telegram, or email."
 ];
 
-const STEPS = [
-  "Менеджер создает ученика и назначает курс.",
-  "Менеджер выпускает одноразовый токен и копирует его из админки.",
-  "Ученик вводит токен на публичной странице.",
-  "Backend активирует токен, переводит его в USED и создает сессию.",
-  "Ученик открывает кабинет и получает доступ только к назначенным урокам."
+const STUDENT_FLOW = [
+  "Open the public page and paste the one-time token.",
+  "Activate access with no separate login or password.",
+  "Enter the student cabinet with assigned courses only.",
+  "Open the lesson and watch the protected video.",
+  "Read notes, check materials, and continue progress in one session."
 ];
 
 export default function SecureCoursePublicPage() {
@@ -58,19 +45,19 @@ export default function SecureCoursePublicPage() {
       <div className={s.shell}>
         <header className={s.topbar}>
           <Link className={s.brand} href="/securecourse" style={{ textDecoration: "none" }}>
-            <span className={s.brandMark}>SC</span>
+            <span className={s.brandMark}>GA</span>
             <span>
-              <strong>SecureCourse</strong>
-              <small>Public site + admin + token-only student access</small>
+              <strong>Global Admissions Academy</strong>
+              <small>English + study abroad courses</small>
             </span>
           </Link>
 
           <div className={s.topnavActions}>
             <Link className={s.ghostButton} href="/securecourse/admin/login">
-              Войти в админку
+              Admin login
             </Link>
             <Link className={s.solidButton} href="/securecourse/student">
-              Открыть кабинет ученика
+              Student cabinet
             </Link>
           </div>
         </header>
@@ -78,44 +65,34 @@ export default function SecureCoursePublicPage() {
         <section className={s.hero}>
           <div className={s.heroGrid}>
             <div className={s.heroCopy}>
-              <p className={s.eyebrow}>Рабочий web/admin MVP</p>
-              <h1 className={s.heroTitle}>Закрытая обучающая платформа с token-only доступом для учеников</h1>
+              <p className={s.eyebrow}>Web-only course platform</p>
+              <h1 className={s.heroTitle}>English and study abroad courses with one-time token access.</h1>
               <p className={s.heroLead}>
-                Админы и менеджеры входят по обычной серверной авторизации. Ученики не
-                регистрируются и не используют логин/пароль: доступ открывается только по
-                одноразовому токену, который после активации сгорает.
+                This MVP is built for language prep, university applications, document guidance, and lesson delivery.
+                Managers work in the admin panel, students activate a one-time token on this page, and then continue in
+                a protected web cabinet.
               </p>
               <div className={s.heroActions}>
-                <Link className={s.solidButton} href="/securecourse/admin/login">
-                  Открыть admin login
-                </Link>
-                <a className={s.outlineButton} href="#activation">
-                  Активировать токен
+                <a className={s.solidButton} href="#activation">
+                  Activate token
                 </a>
+                <Link className={s.outlineButton} href="/securecourse/admin/login">
+                  Open admin
+                </Link>
               </div>
             </div>
 
             <aside className={s.heroPanel}>
-              <p className={s.panelKicker}>Что уже заложено в MVP</p>
+              <p className={s.panelKicker}>What this platform already supports</p>
               <div className={s.panelList}>
-                <article className={s.heroCard}>
-                  <div>
-                    <strong>Admin auth</strong>
-                    <p>DB-backed admin user, password hash, httpOnly admin session cookie</p>
-                  </div>
-                </article>
-                <article className={s.heroCard}>
-                  <div>
-                    <strong>Token flow for students</strong>
-                    <p>ISSUED → USED / REVOKED / EXPIRED без обычной регистрации ученика</p>
-                  </div>
-                </article>
-                <article className={s.heroCard}>
-                  <div>
-                    <strong>Single active session</strong>
-                    <p>Студентский доступ выдается только в рамках одной активной сессии</p>
-                  </div>
-                </article>
+                {PRODUCT_PILLARS.map((item) => (
+                  <article className={s.heroCard} key={item.title}>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.description}</p>
+                    </div>
+                  </article>
+                ))}
               </div>
             </aside>
           </div>
@@ -123,47 +100,35 @@ export default function SecureCoursePublicPage() {
 
         <section className={s.section}>
           <div className={s.sectionHead}>
-            <p className={s.sectionKicker}>Три интерфейса проекта</p>
-            <h2 className={s.sectionTitle}>Каждая часть отвечает за свою зону доступа</h2>
-          </div>
-
-          <div className={s.interfaceGrid}>
-            {INTERFACES.map((item) => (
-              <article className={s.interfaceCard} key={item.title}>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={s.section}>
-          <div className={s.sectionHead}>
-            <p className={s.sectionKicker}>Ключевые свойства системы</p>
-            <h2 className={s.sectionTitle}>Что защищает доступ уже на web/admin MVP</h2>
-          </div>
-
-          <div className={s.interfaceGrid}>
-            {FEATURES.map((item) => (
-              <article className={s.interfaceCard} key={item.title}>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={s.section}>
-          <div className={s.sectionHead}>
-            <p className={s.sectionKicker}>Как это работает</p>
-            <h2 className={s.sectionTitle}>Путь ученика без регистрации и пароля</h2>
+            <p className={s.sectionKicker}>Admin workflow</p>
+            <h2 className={s.sectionTitle}>A manager should be able to finish the whole delivery flow in one place.</h2>
           </div>
 
           <div className={s.flowGrid}>
-            {STEPS.map((step, index) => (
+            {ADMIN_FLOW.map((step, index) => (
               <article className={s.stepCard} key={step}>
                 <span className={s.stepNumber}>{index + 1}</span>
-                <p className={s.stepCopy}>{step}</p>
+                <p className={s.helperText} style={{ color: "var(--text-soft)", fontSize: "1rem" }}>
+                  {step}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className={s.section}>
+          <div className={s.sectionHead}>
+            <p className={s.sectionKicker}>Student workflow</p>
+            <h2 className={s.sectionTitle}>No student password flow, no extra onboarding.</h2>
+          </div>
+
+          <div className={s.flowGrid}>
+            {STUDENT_FLOW.map((step, index) => (
+              <article className={s.stepCard} key={step}>
+                <span className={s.stepNumber}>{index + 1}</span>
+                <p className={s.helperText} style={{ color: "var(--text-soft)", fontSize: "1rem" }}>
+                  {step}
+                </p>
               </article>
             ))}
           </div>
@@ -175,17 +140,23 @@ export default function SecureCoursePublicPage() {
 
         <section className={s.callout} style={{ marginTop: "4rem" }}>
           <div>
-            <p className={s.surfaceEyebrow}>Следующий шаг</p>
-            <h2 className={s.calloutTitle} style={{ fontSize: "2rem", marginBottom: "1.5rem" }}>
-              Сначала web/admin MVP, затем отдельное mobile app
+            <p className={s.surfaceEyebrow}>Three linked interfaces</p>
+            <h2 className={s.calloutTitle} style={{ fontSize: "2rem", marginBottom: "1rem" }}>
+              Public landing, admin workspace, and student cabinet all run in one Railway deployment.
             </h2>
+            <p className={s.helperText} style={{ color: "var(--text-soft)", maxWidth: "56rem" }}>
+              The admin side manages students, courses, lessons, tokens, sessions, and uploads. The public page handles
+              activation. The student cabinet opens only after token activation and shows assigned English and study
+              abroad courses.
+            </p>
           </div>
+
           <div className={s.heroActions}>
-            <Link className={s.solidButton} href="/securecourse/admin">
-              Перейти в админку
+            <Link className={s.solidButton} href="/securecourse/admin/login">
+              Go to admin
             </Link>
             <Link className={s.outlineButton} href="/securecourse/student">
-              Открыть student cabinet
+              Open student cabinet
             </Link>
           </div>
         </section>

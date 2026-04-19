@@ -110,7 +110,7 @@ export async function POST(request, { params }) {
       return NextResponse.json(issueToken(adminSession.sessionId, body));
     }
 
-    if (parts.length === 3 && parts[0] === "videos" && parts[2] === "upload-intents") {
+    if (parts.length === 2 && parts[0] === "videos" && parts[1] === "upload-intents") {
       return NextResponse.json(createUploadIntent(adminSession.sessionId, body));
     }
 

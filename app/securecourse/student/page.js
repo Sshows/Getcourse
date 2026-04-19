@@ -42,8 +42,8 @@ function formatDateTime(value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
 }
@@ -52,6 +52,7 @@ export default function SecureCourseStudentPage() {
   const [session, setSession] = useState({
     checking: true,
     authenticated: false,
+    user: null,
     userId: "",
     sessionId: ""
   });
@@ -85,6 +86,7 @@ export default function SecureCourseStudentPage() {
         setSession({
           checking: false,
           authenticated: false,
+          user: null,
           userId: "",
           sessionId: ""
         });
@@ -95,6 +97,7 @@ export default function SecureCourseStudentPage() {
       setSession({
         checking: false,
         authenticated: true,
+        user: payload.user || null,
         userId: payload.userId,
         sessionId: payload.sessionId
       });
@@ -104,10 +107,11 @@ export default function SecureCourseStudentPage() {
       setSession({
         checking: false,
         authenticated: false,
+        user: null,
         userId: "",
         sessionId: ""
       });
-      setError(requestError.message || "Не удалось проверить сессию ученика.");
+      setError(requestError.message || "Could not verify the student session.");
     }
   }
 
@@ -141,7 +145,7 @@ export default function SecureCourseStudentPage() {
   const selectedCourse = selectedEnrollment?.course || null;
   const lessons = selectedCourse?.lessons || [];
 
-  async function handleOpenLesson(lessonId) {
+  async function openLesson(lessonId) {
     setLessonState({
       loading: true,
       lesson: null,
@@ -150,19 +154,17 @@ export default function SecureCourseStudentPage() {
       playback: null,
       error: ""
     });
-    setNotice("");
-    setError("");
 
     try {
       const lessonPayload = await getStudentLesson(lessonId);
-      let playbackPayload = null;
+      let playback = null;
       let playbackError = "";
 
       try {
-        playbackPayload = await requestPlaybackAccess(lessonId);
-      } catch (playbackRequestError) {
-        playbackError =
-          playbackRequestError.message || "Видео пока не готово или недоступно для текущей сессии.";
+        const playbackPayload = await requestPlaybackAccess(lessonId);
+        playback = playbackPayload.playback;
+      } catch (requestError) {
+        playbackError = requestError.message || "Video is not ready yet.";
       }
 
       setLessonState({
@@ -170,7 +172,7 @@ export default function SecureCourseStudentPage() {
         lesson: lessonPayload.lesson,
         enrollment: lessonPayload.enrollment,
         progress: lessonPayload.progress,
-        playback: playbackPayload?.playback || null,
+        playback,
         error: playbackError
       });
     } catch (requestError) {
@@ -180,12 +182,12 @@ export default function SecureCourseStudentPage() {
         enrollment: null,
         progress: null,
         playback: null,
-        error: requestError.message || "Не удалось загрузить урок."
+        error: requestError.message || "Could not load the lesson."
       });
     }
   }
 
-  async function handleMarkCompleted() {
+  async function markCompleted() {
     if (!lessonState.lesson) {
       return;
     }
@@ -200,11 +202,11 @@ export default function SecureCourseStudentPage() {
         completed: true,
         lastPositionSeconds: lessonState.progress?.lastPositionSeconds || 0
       });
-      setNotice("Прогресс обновлен. Урок отмечен как завершенный.");
+      setNotice("Lesson marked as completed.");
       await loadCourses();
-      await handleOpenLesson(lessonState.lesson.id);
+      await openLesson(lessonState.lesson.id);
     } catch (requestError) {
-      setError(requestError.message || "Не удалось обновить прогресс.");
+      setError(requestError.message || "Could not update progress.");
     } finally {
       setBusyAction("");
     }
@@ -220,6 +222,7 @@ export default function SecureCourseStudentPage() {
       setSession({
         checking: false,
         authenticated: false,
+        user: null,
         userId: "",
         sessionId: ""
       });
@@ -234,7 +237,7 @@ export default function SecureCourseStudentPage() {
         error: ""
       });
     } catch (requestError) {
-      setError(requestError.message || "Не удалось завершить сессию.");
+      setError(requestError.message || "Could not close the session.");
     } finally {
       setBusyAction("");
     }
@@ -246,9 +249,9 @@ export default function SecureCourseStudentPage() {
         <div className={s.ambient} aria-hidden="true" />
         <div className={s.shell}>
           <section className={s.callout}>
-            <p className={s.surfaceEyebrow}>Проверка доступа</p>
-            <h1 className={s.calloutTitle}>Проверяем активную сессию ученика</h1>
-            <p className={s.helperText}>Если токен уже активирован, кабинет откроется автоматически.</p>
+            <p className={s.surfaceEyebrow}>Checking access</p>
+            <h1 className={s.calloutTitle}>Verifying the active student session.</h1>
+            <p className={s.helperText}>If the token was already activated, the cabinet will open automatically.</p>
           </section>
         </div>
       </main>
@@ -261,19 +264,19 @@ export default function SecureCourseStudentPage() {
         <div className={s.ambient} aria-hidden="true" />
         <div className={s.shell}>
           <section className={s.callout}>
-            <p className={s.surfaceEyebrow}>Token-only student access</p>
-            <h1 className={s.calloutTitle}>Сначала активируйте одноразовый токен</h1>
-            <p className={s.helperText}>
-              У учеников нет обычной регистрации и пароля. Доступ выдается менеджером через
-              одноразовый токен на публичной странице.
+            <p className={s.surfaceEyebrow}>Token-only access</p>
+            <h1 className={s.calloutTitle}>Activate a one-time token before opening the student cabinet.</h1>
+            <p className={s.helperText} style={{ color: "var(--text-soft)" }}>
+              Students do not use a regular password. The manager sends a one-time token from the admin panel, and that
+              token opens the session for the assigned English or admissions courses.
             </p>
             {error ? <p className={s.feedbackError}>{error}</p> : null}
-            <div className={s.calloutActions}>
+            <div className={s.heroActions}>
               <Link className={s.solidButton} href="/securecourse">
-                Перейти к активации токена
+                Activate token
               </Link>
               <Link className={s.outlineButton} href="/securecourse/admin/login">
-                Войти как администратор
+                Admin login
               </Link>
             </div>
           </section>
@@ -289,206 +292,185 @@ export default function SecureCourseStudentPage() {
         <section className={s.surface}>
           <div className={s.surfaceHeader}>
             <div>
-              <p className={s.surfaceEyebrow}>Кабинет ученика</p>
-              <h1 className={s.surfaceTitle}>Доступ открыт только в рамках текущей активной сессии</h1>
+              <p className={s.surfaceEyebrow}>Student cabinet</p>
+              <h1 className={s.surfaceTitle}>
+                {session.user?.fullName || "Student"} can view assigned English and study abroad lessons.
+              </h1>
             </div>
-            <div className={s.calloutActions}>
+            <div className={s.heroActions}>
               <Link className={s.outlineButton} href="/securecourse">
-                Активировать другой токен
+                Activate another token
               </Link>
-              <button
-                className={s.solidButton}
-                disabled={busyAction === "logout"}
-                onClick={handleLogout}
-                type="button"
-              >
-                {busyAction === "logout" ? "Завершаю..." : "Выйти"}
+              <button className={s.solidButton} disabled={busyAction === "logout"} onClick={handleLogout} type="button">
+                {busyAction === "logout" ? "Closing..." : "Logout"}
               </button>
             </div>
           </div>
 
-          <div className={s.compactList}>
-            <span>User ID: {session.userId}</span>
-            <span>Session ID: {session.sessionId}</span>
-            <span>Heartbeat: каждые 60 секунд</span>
+          <div className={s.gridThree} style={{ padding: "2rem" }}>
+            <div className={s.materialCard}>
+              <p className={s.surfaceEyebrow}>Student</p>
+              <strong>{session.user?.fullName || "Student account"}</strong>
+              <p className={s.helperText}>{session.user?.email || "Assigned by manager"}</p>
+            </div>
+            <div className={s.materialCard}>
+              <p className={s.surfaceEyebrow}>Session</p>
+              <strong>{session.sessionId}</strong>
+              <p className={s.helperText}>Heartbeat keeps the session alive every 60 seconds.</p>
+            </div>
+            <div className={s.materialCard}>
+              <p className={s.surfaceEyebrow}>Courses</p>
+              <strong>{courses.length}</strong>
+              <p className={s.helperText}>Only currently assigned courses are visible.</p>
+            </div>
           </div>
-
-          {error ? <p className={s.feedbackError}>{error}</p> : null}
-          {notice ? <p className={s.feedbackSuccess}>{notice}</p> : null}
         </section>
 
-        <section
-          className={s.section}
-          style={{ display: "grid", gridTemplateColumns: "1.05fr 1.15fr", gap: "1.25rem", padding: 0 }}
-        >
+        {error ? <p className={s.feedbackError}>{error}</p> : null}
+        {notice ? <p className={s.feedbackSuccess}>{notice}</p> : null}
+
+        <section className={s.gridTwo} style={{ paddingTop: "2rem" }}>
           <div className={s.surface}>
             <div className={s.surfaceHeader}>
               <div>
-                <p className={s.surfaceEyebrow}>Назначенные курсы</p>
-                <h2 className={s.surfaceTitle}>Выберите курс и урок</h2>
+                <p className={s.surfaceEyebrow}>Assigned courses</p>
+                <h2 className={s.surfaceTitle}>Choose a course and lesson.</h2>
               </div>
             </div>
 
-            {!courses.length ? (
-              <p className={s.helperText}>Пока нет активных назначений. Обратитесь к менеджеру.</p>
-            ) : (
-              <div className={s.compactList}>
-                {courses.map((enrollment) => (
-                  <button
-                    key={enrollment.id}
-                    className={selectedEnrollmentId === enrollment.id ? s.solidButton : s.outlineButton}
-                    onClick={() => {
-                      setSelectedEnrollmentId(enrollment.id);
-                      setLessonState({
-                        loading: false,
-                        lesson: null,
-                        enrollment: null,
-                        progress: null,
-                        playback: null,
-                        error: ""
-                      });
-                    }}
-                    style={{ justifyContent: "space-between" }}
-                    type="button"
-                  >
-                    <span>{enrollment.course.title}</span>
-                    <span className={badgeClass(enrollment.status)}>{enrollment.status}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {selectedCourse ? (
-              <div style={{ marginTop: "1.25rem" }}>
-                <p className={s.helperText} style={{ marginBottom: "0.75rem" }}>
-                  {selectedCourse.shortDescription || "Курс без краткого описания."}
-                </p>
+            <div style={{ padding: "2rem" }}>
+              {!courses.length ? (
+                <p className={s.helperText}>No active enrollments yet. Ask your manager to assign a course.</p>
+              ) : (
                 <div className={s.compactList}>
-                  {lessons.map((lesson) => (
+                  {courses.map((enrollment) => (
                     <button
-                      key={lesson.id}
-                      className={
-                        lessonState.lesson?.id === lesson.id ? s.solidButton : s.ghostButton
-                      }
-                      onClick={() => handleOpenLesson(lesson.id)}
+                      key={enrollment.id}
+                      className={selectedEnrollmentId === enrollment.id ? s.solidButton : s.outlineButton}
+                      onClick={() => {
+                        setSelectedEnrollmentId(enrollment.id);
+                        setLessonState({
+                          loading: false,
+                          lesson: null,
+                          enrollment: null,
+                          progress: null,
+                          playback: null,
+                          error: ""
+                        });
+                      }}
                       style={{ justifyContent: "space-between" }}
                       type="button"
                     >
-                      <span>{lesson.title}</span>
-                      <span className={badgeClass(lesson.status)}>{lesson.status}</span>
+                      <span>{enrollment.course.title}</span>
+                      <span className={badgeClass(enrollment.status)}>{enrollment.status}</span>
                     </button>
                   ))}
                 </div>
-              </div>
-            ) : null}
+              )}
+
+              {selectedCourse ? (
+                <div style={{ marginTop: "1.5rem" }}>
+                  <p className={s.helperText} style={{ color: "var(--text-soft)", marginBottom: "1rem" }}>
+                    {selectedCourse.shortDescription || "This course contains guided lessons and downloadable notes."}
+                  </p>
+                  <div className={s.compactList}>
+                    {lessons.map((lesson) => (
+                      <button
+                        key={lesson.id}
+                        className={lessonState.lesson?.id === lesson.id ? s.solidButton : s.ghostButton}
+                        onClick={() => openLesson(lesson.id)}
+                        style={{ justifyContent: "space-between" }}
+                        type="button"
+                      >
+                        <span>{lesson.title}</span>
+                        <span className={badgeClass(lesson.status)}>{lesson.status}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className={s.surface}>
             <div className={s.surfaceHeader}>
               <div>
-                <p className={s.surfaceEyebrow}>Урок</p>
+                <p className={s.surfaceEyebrow}>Lesson view</p>
                 <h2 className={s.surfaceTitle}>
-                  {lessonState.lesson ? lessonState.lesson.title : "Выберите урок из назначенного курса"}
+                  {lessonState.lesson ? lessonState.lesson.title : "Select a lesson to open the player and notes."}
                 </h2>
               </div>
             </div>
 
-            {lessonState.loading ? (
-              <p className={s.helperText}>Загружаем детали урока и playback access...</p>
-            ) : lessonState.lesson ? (
-              <div className={s.compactList}>
-                <span>Курс: {lessonState.lesson.course.title}</span>
-                <span>Статус урока: {lessonState.lesson.status}</span>
-                <span>Прогресс: {lessonState.progress?.progressPercent ?? 0}%</span>
-                <span>Последний просмотр: {formatDateTime(lessonState.progress?.lastWatchedAt)}</span>
-              </div>
-            ) : (
-              <p className={s.helperText}>
-                Здесь появится видео, материалы и прогресс после выбора урока.
-              </p>
-            )}
+            <div style={{ padding: "2rem", display: "grid", gap: "1.25rem" }}>
+              {lessonState.loading ? <p className={s.helperText}>Loading lesson and playback access...</p> : null}
 
-            {lessonState.lesson ? (
-              <div style={{ marginTop: "1rem", display: "grid", gap: "1rem" }}>
-                <div
-                  style={{
-                    border: "1px solid var(--card-border)",
-                    borderRadius: "var(--radius-lg)",
-                    overflow: "hidden",
-                    minHeight: "18rem",
-                    background: "rgba(0, 0, 0, 0.5)",
-                    boxShadow: "inset 0 0 20px rgba(0,0,0,0.8)"
-                  }}
-                >
-                  {lessonState.playback?.manifestUrl ? (
-                    <video
-                      controls
-                      src={lessonState.playback.manifestUrl}
-                      style={{ width: "100%", height: "100%", minHeight: "18rem", display: "block" }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        minHeight: "18rem",
-                        display: "grid",
-                        placeItems: "center",
-                        padding: "1.5rem",
-                        color: "var(--text-soft)",
-                        textAlign: "center"
-                      }}
-                    >
-                      <div>
-                        <strong style={{ fontSize: "1.1rem", color: "#fff" }}>Защищенное видео</strong>
-                        <p style={{ marginTop: "0.6rem" }}>
-                          {lessonState.error || "Для этого урока еще нет готового playback access."}
-                        </p>
+              {!lessonState.loading && !lessonState.lesson ? (
+                <p className={s.helperText}>The lesson details, video, and materials will appear here.</p>
+              ) : null}
+
+              {lessonState.lesson ? (
+                <>
+                  <div className={s.compactList}>
+                    <span>Course: {lessonState.lesson.course?.title || "Assigned course"}</span>
+                    <span>Progress: {lessonState.progress?.progressPercent ?? 0}%</span>
+                    <span>Last watched: {formatDateTime(lessonState.progress?.lastWatchedAt)}</span>
+                  </div>
+
+                  <div className={s.videoFrame}>
+                    {lessonState.playback?.manifestUrl ? (
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        src={lessonState.playback.manifestUrl}
+                        style={{ width: "100%", display: "block", aspectRatio: "16 / 9", background: "#000" }}
+                      />
+                    ) : (
+                      <div style={{ padding: "2rem", minHeight: "18rem", display: "grid", placeItems: "center" }}>
+                        <p className={s.helperText}>{lessonState.error || "Video is not ready yet."}</p>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                <div className={s.callout}>
-                  <p className={s.surfaceEyebrow}>Материалы урока</p>
-                  {lessonState.lesson.materials.length ? (
-                    <div className={s.compactList}>
-                      {lessonState.lesson.materials.map((material) => (
-                        <div
-                          key={material.id}
-                          style={{
-                            padding: "1rem",
-                            border: "1px solid var(--card-border)",
-                            borderRadius: "var(--radius-md)",
-                            background: "rgba(0,0,0,0.2)"
-                          }}
-                        >
+                  {lessonState.lesson.content ? (
+                    <div className={s.materialCard}>
+                      <p className={s.surfaceEyebrow}>Lesson summary</p>
+                      <p className={s.helperText} style={{ color: "var(--text-soft)", whiteSpace: "pre-wrap" }}>
+                        {lessonState.lesson.content}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className={s.surfaceGrid}>
+                    <p className={s.surfaceEyebrow}>Materials</p>
+                    {lessonState.lesson.materials?.length ? (
+                      lessonState.lesson.materials.map((material) => (
+                        <div className={s.materialCard} key={material.id}>
                           <strong>{material.title}</strong>
-                          <p style={{ margin: "0.35rem 0 0", color: "var(--text-soft)" }}>
-                            {material.type}
-                            {material.url ? ` · ${material.url}` : ""}
+                          <p className={s.helperText} style={{ color: "var(--text-soft)", marginTop: "0.5rem" }}>
+                            {material.content || material.url || "Material attached to this lesson."}
                           </p>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={s.helperText}>Дополнительные материалы пока не добавлены.</p>
-                  )}
-                </div>
+                      ))
+                    ) : (
+                      <p className={s.helperText}>No materials yet for this lesson.</p>
+                    )}
+                  </div>
 
-                <div className={s.calloutActions}>
-                  <button
-                    className={s.solidButton}
-                    disabled={busyAction === "complete-lesson"}
-                    onClick={handleMarkCompleted}
-                    type="button"
-                  >
-                    {busyAction === "complete-lesson" ? "Сохраняю..." : "Отметить урок завершенным"}
-                  </button>
-                  <span className={s.helperText}>
-                    Playback access выдается только после проверки enrollment и активной сессии.
-                  </span>
-                </div>
-              </div>
-            ) : null}
+                  <div className={s.heroActions}>
+                    <button
+                      className={s.solidButton}
+                      disabled={busyAction === "complete-lesson"}
+                      onClick={markCompleted}
+                      type="button"
+                    >
+                      {busyAction === "complete-lesson" ? "Saving..." : "Mark lesson as completed"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </section>
       </div>

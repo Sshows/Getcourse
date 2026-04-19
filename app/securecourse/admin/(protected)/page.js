@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   createCourse,
   createEnrollment,
+  createLesson,
+  createLessonMaterial,
+  createUploadIntent,
   createUser,
+  getAdminSession,
   getDashboardSnapshot,
+  getUploads,
   issueToken,
   logoutAdmin,
   revokeSession,
@@ -14,29 +19,22 @@ import {
 } from "@/lib/securecourse-api";
 import styles from "../../securecourse.module.css";
 
-function toneClass(tone) {
-  if (tone === "green") return styles.toneGreen;
-  if (tone === "blue") return styles.toneBlue;
-  if (tone === "red") return styles.toneRed;
-  return styles.toneGold;
-}
-
 function badgeClass(value) {
   const normalized = String(value || "").toLowerCase();
 
   if (normalized.includes("active") || normalized.includes("ready") || normalized.includes("published")) {
-    return styles.badgeGreen;
+    return `${styles.badge} ${styles.badgeGreen}`;
   }
 
   if (normalized.includes("used") || normalized.includes("processing") || normalized.includes("waiting")) {
-    return styles.badgeBlue;
+    return `${styles.badge} ${styles.badgeBlue}`;
   }
 
   if (normalized.includes("revoked") || normalized.includes("blocked") || normalized.includes("error")) {
-    return styles.badgeRed;
+    return `${styles.badge} ${styles.badgeRed}`;
   }
 
-  return styles.badgeGold;
+  return `${styles.badge} ${styles.badgeGold}`;
 }
 
 function formatDateTime(value) {
@@ -50,33 +48,42 @@ function formatDateTime(value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
 }
 
 function slugify(value) {
-  return value
+  return String(value || "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function SecureCourseAdminPage() {
+  const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [copiedToken, setCopiedToken] = useState("");
+  const [adminSession, setAdminSession] = useState(null);
   const [lastIssuedToken, setLastIssuedToken] = useState(null);
+  const [selectedUploadFile, setSelectedUploadFile] = useState(null);
+  const [uploadState, setUploadState] = useState(null);
   const [data, setData] = useState({
     metrics: {
       activeSessions: 0,
       issuedTokensToday: 0,
       readyVideoAssets: 0,
-      totalUsers: 0
+      totalUsers: 0,
+      activeUsers: 0
     },
     users: [],
     courses: [],
@@ -95,37 +102,39 @@ export default function SecureCourseAdminPage() {
       slug: "",
       shortDescription: ""
     },
+    lesson: {
+      courseId: "",
+      title: "",
+      slug: "",
+      content: "",
+      notes: ""
+    },
     enrollment: {
       userId: "",
       courseId: ""
     },
     token: {
       enrollmentId: ""
+    },
+    upload: {
+      lessonId: "",
+      provider: "RAILWAY_LOCAL"
     }
   });
 
-  async function loadAdminData() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const snapshot = await getDashboardSnapshot();
-      setData(snapshot);
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        window.location.assign("/securecourse/admin/login?redirectTo=/securecourse/admin");
-        return;
-      }
-
-      setError(requestError.message || "Failed to load admin dashboard.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadAdminData();
-  }, []);
+  const lessonOptions = useMemo(
+    () =>
+      data.courses.flatMap((course) =>
+        (course.lessons || []).map((lesson) => ({
+          id: lesson.id,
+          title: lesson.title,
+          status: lesson.status,
+          courseId: course.id,
+          courseTitle: course.title
+        }))
+      ),
+    [data.courses]
+  );
 
   const activeEnrollments = useMemo(
     () =>
@@ -140,7 +149,49 @@ export default function SecureCourseAdminPage() {
     [data.users]
   );
 
+  const selectedUploadLesson = useMemo(
+    () => lessonOptions.find((lesson) => lesson.id === forms.upload.lessonId) || null,
+    [forms.upload.lessonId, lessonOptions]
+  );
+
+  async function loadAdminData(options = {}) {
+    const showSpinner = options.showSpinner ?? true;
+
+    if (showSpinner) {
+      setLoading(true);
+    }
+
+    setError("");
+
+    try {
+      const [sessionPayload, snapshot] = await Promise.all([getAdminSession(), getDashboardSnapshot()]);
+      setAdminSession(sessionPayload);
+      setData(snapshot);
+      return snapshot;
+    } catch (requestError) {
+      if (requestError.status === 401) {
+        window.location.assign("/securecourse/admin/login?redirectTo=/securecourse/admin");
+        return null;
+      }
+
+      setError(requestError.message || "Failed to load the admin dashboard.");
+      return null;
+    } finally {
+      if (showSpinner) {
+        setLoading(false);
+      }
+    }
+  }
+
   useEffect(() => {
+    loadAdminData();
+  }, []);
+
+  useEffect(() => {
+    if (!forms.lesson.courseId && data.courses[0]?.id) {
+      updateForm("lesson", "courseId", data.courses[0].id);
+    }
+
     if (!forms.enrollment.userId && data.users[0]?.id) {
       updateForm("enrollment", "userId", data.users[0].id);
     }
@@ -152,13 +203,20 @@ export default function SecureCourseAdminPage() {
     if (!forms.token.enrollmentId && activeEnrollments[0]?.id) {
       updateForm("token", "enrollmentId", activeEnrollments[0].id);
     }
+
+    if (!forms.upload.lessonId && lessonOptions[0]?.id) {
+      updateForm("upload", "lessonId", lessonOptions[0].id);
+    }
   }, [
     activeEnrollments,
     data.courses,
     data.users,
     forms.enrollment.courseId,
     forms.enrollment.userId,
-    forms.token.enrollmentId
+    forms.lesson.courseId,
+    forms.token.enrollmentId,
+    forms.upload.lessonId,
+    lessonOptions
   ]);
 
   function updateForm(section, field, value) {
@@ -193,7 +251,7 @@ export default function SecureCourseAdminPage() {
         }
       }));
       setNotice("Student created. Next step: enroll the student into a course.");
-      await loadAdminData();
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Failed to create student.");
     } finally {
@@ -225,10 +283,60 @@ export default function SecureCourseAdminPage() {
           shortDescription: ""
         }
       }));
-      setNotice("Course created and published.");
-      await loadAdminData();
+      setNotice("Course created. Add the first lesson and upload the video next.");
+      const snapshot = await loadAdminData({ showSpinner: false });
+
+      if (snapshot?.courses?.[0]?.id && !forms.lesson.courseId) {
+        updateForm("lesson", "courseId", snapshot.courses[0].id);
+      }
     } catch (requestError) {
       setError(requestError.message || "Failed to create course.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function handleCreateLesson(event) {
+    event.preventDefault();
+    setBusyAction("create-lesson");
+    setError("");
+    setNotice("");
+
+    try {
+      const slug = forms.lesson.slug || slugify(forms.lesson.title);
+      const lesson = await createLesson(forms.lesson.courseId, {
+        title: forms.lesson.title,
+        slug,
+        status: "PUBLISHED",
+        content: forms.lesson.content
+      });
+
+      if (forms.lesson.notes.trim()) {
+        await createLessonMaterial(lesson.id, {
+          title: `${forms.lesson.title} notes`,
+          type: "TEXT",
+          content: forms.lesson.notes
+        });
+      }
+
+      setForms((current) => ({
+        ...current,
+        lesson: {
+          ...current.lesson,
+          title: "",
+          slug: "",
+          content: "",
+          notes: ""
+        },
+        upload: {
+          ...current.upload,
+          lessonId: lesson.id
+        }
+      }));
+      setNotice("Lesson created. You can upload the lesson video now.");
+      await loadAdminData({ showSpinner: false });
+    } catch (requestError) {
+      setError(requestError.message || "Failed to create lesson.");
     } finally {
       setBusyAction("");
     }
@@ -247,8 +355,8 @@ export default function SecureCourseAdminPage() {
         note: "Assigned by manager from admin panel"
       });
 
-      setNotice("Enrollment created. The student can now receive a one-time token.");
-      await loadAdminData();
+      setNotice("Enrollment created. You can issue a one-time token next.");
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Failed to create enrollment.");
     } finally {
@@ -272,7 +380,7 @@ export default function SecureCourseAdminPage() {
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
-        activationExpiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+        activationExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         note: "Issued from SecureCourse admin panel"
       });
 
@@ -284,8 +392,8 @@ export default function SecureCourseAdminPage() {
         expiresAt: issued.activationExpiresAt
       });
       setCopiedToken("");
-      setNotice("One-time token issued. Give it to the student and they can activate access on the public page.");
-      await loadAdminData();
+      setNotice("Token issued. Copy it now and send it to the student.");
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Failed to issue token.");
     } finally {
@@ -297,7 +405,7 @@ export default function SecureCourseAdminPage() {
     try {
       await navigator.clipboard.writeText(rawToken);
       setCopiedToken(rawToken);
-      setNotice("Token copied. Students use this token on the public activation page.");
+      setNotice("Token copied. Send it to the student from this screen.");
     } catch {
       setError("Copy failed. Please copy the token manually.");
     }
@@ -311,7 +419,7 @@ export default function SecureCourseAdminPage() {
     try {
       await revokeToken(tokenId, "revoked_by_manager");
       setNotice("Token revoked.");
-      await loadAdminData();
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Failed to revoke token.");
     } finally {
@@ -327,9 +435,97 @@ export default function SecureCourseAdminPage() {
     try {
       await revokeSession(sessionId, "revoked_by_manager");
       setNotice("Student session revoked.");
-      await loadAdminData();
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Failed to revoke session.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function handleUploadVideo(event) {
+    event.preventDefault();
+    setBusyAction("upload-video");
+    setError("");
+    setNotice("");
+
+    try {
+      if (!forms.upload.lessonId) {
+        throw new Error("Choose a lesson first.");
+      }
+
+      if (!selectedUploadFile) {
+        throw new Error("Choose a video file to upload.");
+      }
+
+      const intent = await createUploadIntent({
+        lessonId: forms.upload.lessonId,
+        provider: forms.upload.provider,
+        fileName: selectedUploadFile.name,
+        fileSize: selectedUploadFile.size,
+        mimeType: selectedUploadFile.type
+      });
+
+      setUploadState({
+        assetId: intent.assetId,
+        status: intent.status,
+        lessonTitle: selectedUploadLesson?.title || "Lesson",
+        fileName: selectedUploadFile.name
+      });
+
+      const formData = new FormData();
+      formData.append("file", selectedUploadFile);
+
+      const uploadResponse = await fetch(intent.uploadUrl, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      const uploadPayload = await uploadResponse.json().catch(() => null);
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadPayload?.message || "Upload failed.");
+      }
+
+      setUploadState({
+        assetId: intent.assetId,
+        status: uploadPayload?.asset?.status || "processing",
+        lessonTitle: selectedUploadLesson?.title || "Lesson",
+        fileName: selectedUploadFile.name
+      });
+
+      setNotice("Upload received. Processing video...");
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await wait(700);
+        const uploads = await getUploads();
+        const currentAsset = uploads.find((item) => item.id === intent.assetId);
+
+        if (currentAsset) {
+          setUploadState({
+            assetId: currentAsset.id,
+            status: currentAsset.status,
+            lessonTitle: currentAsset.lessonTitle || selectedUploadLesson?.title || "Lesson",
+            fileName: currentAsset.fileName || selectedUploadFile.name
+          });
+        }
+
+        if (currentAsset && ["ready", "error"].includes(String(currentAsset.status || "").toLowerCase())) {
+          break;
+        }
+      }
+
+      await loadAdminData({ showSpinner: false });
+      setSelectedUploadFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      setNotice("Upload flow finished. The lesson now has a playable video asset.");
+    } catch (requestError) {
+      setError(requestError.message || "Video upload failed.");
     } finally {
       setBusyAction("");
     }
@@ -353,443 +549,624 @@ export default function SecureCourseAdminPage() {
   return (
     <main className={styles.page}>
       <div className={styles.ambient} aria-hidden="true" />
-      <section className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <p className={styles.surfaceEyebrow}>SecureCourse Admin</p>
-          <h1 className={styles.heroTitle}>Control center for one-time access, sessions, and protected lessons.</h1>
-          <p className={styles.heroDescription}>
-            This Railway deployment runs the public website, admin panel, and secure token flows in one service.
-          </p>
-          <div className={styles.inlineActions}>
-            <button className={styles.solidButton} onClick={loadAdminData} type="button">
-              Refresh data
-            </button>
-            <button
-              className={styles.ghostButton}
-              disabled={busyAction === "logout-admin"}
-              onClick={handleAdminLogout}
-              type="button"
-            >
-              {busyAction === "logout-admin" ? "Signing out..." : "Logout"}
-            </button>
-            <Link className={styles.inlineLink} href="/securecourse">
-              Open public page
-            </Link>
+      <div className={styles.shell}>
+        <section className={styles.hero}>
+          <div className={styles.heroGrid}>
+            <div className={styles.heroCopy}>
+              <p className={styles.surfaceEyebrow}>Admin workspace</p>
+              <h1 className={styles.heroTitle}>Run the full English and study abroad delivery flow in one panel.</h1>
+              <p className={styles.heroLead}>
+                Create students, build courses and lessons, enroll learners, issue one-time tokens, upload videos, and
+                manage active sessions from one Railway deployment.
+              </p>
+              <div className={styles.heroActions}>
+                <button className={styles.solidButton} onClick={() => loadAdminData()} type="button">
+                  Refresh dashboard
+                </button>
+                <button
+                  className={styles.outlineButton}
+                  disabled={busyAction === "logout-admin"}
+                  onClick={handleAdminLogout}
+                  type="button"
+                >
+                  {busyAction === "logout-admin" ? "Signing out..." : "Logout"}
+                </button>
+                <Link className={styles.ghostButton} href="/securecourse">
+                  Public page
+                </Link>
+              </div>
+            </div>
+
+            <aside className={styles.heroPanel}>
+              <p className={styles.panelKicker}>Signed in as</p>
+              <div className={styles.panelList}>
+                <article className={styles.heroCard}>
+                  <div>
+                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Admin user"}</strong>
+                    <p>{adminSession?.user?.email || "Authenticated admin session"}</p>
+                  </div>
+                </article>
+                <article className={styles.heroCard}>
+                  <div>
+                    <strong>Recommended order</strong>
+                    <p>Create student → create course → create lesson → enroll → issue token → upload video.</p>
+                  </div>
+                </article>
+                <article className={styles.heroCard}>
+                  <div>
+                    <strong>Activation path</strong>
+                    <p>Students activate the token on the public page and continue in the student cabinet.</p>
+                  </div>
+                </article>
+              </div>
+            </aside>
           </div>
-        </div>
-        <div className={styles.metricGrid}>
-          <article className={`${styles.metricCard} ${toneClass("green")}`}>
+        </section>
+
+        <section className={styles.metricStrip}>
+          <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Students</span>
             <strong className={styles.metricValue}>{data.metrics.totalUsers}</strong>
-            <span className={styles.metricMeta}>{data.metrics.activeUsers || 0} active</span>
+            <span className={styles.statusMeta}>{data.metrics.activeUsers} active</span>
           </article>
-          <article className={`${styles.metricCard} ${toneClass("blue")}`}>
-            <span className={styles.metricLabel}>Active Sessions</span>
-            <strong className={styles.metricValue}>{data.metrics.activeSessions}</strong>
-            <span className={styles.metricMeta}>single-device policy enforced</span>
-          </article>
-          <article className={`${styles.metricCard} ${toneClass("gold")}`}>
-            <span className={styles.metricLabel}>Issued Today</span>
+          <article className={styles.metricCard}>
+            <span className={styles.metricLabel}>Tokens today</span>
             <strong className={styles.metricValue}>{data.metrics.issuedTokensToday}</strong>
-            <span className={styles.metricMeta}>one-time tokens</span>
+            <span className={styles.statusMeta}>one-time access links and codes</span>
           </article>
-          <article className={`${styles.metricCard} ${toneClass("red")}`}>
-            <span className={styles.metricLabel}>Ready Videos</span>
+          <article className={styles.metricCard}>
+            <span className={styles.metricLabel}>Active sessions</span>
+            <strong className={styles.metricValue}>{data.metrics.activeSessions}</strong>
+            <span className={styles.statusMeta}>single active student session enforced</span>
+          </article>
+          <article className={styles.metricCard}>
+            <span className={styles.metricLabel}>Ready videos</span>
             <strong className={styles.metricValue}>{data.metrics.readyVideoAssets}</strong>
-            <span className={styles.metricMeta}>protected playback assets</span>
+            <span className={styles.statusMeta}>playable lesson assets</span>
           </article>
-        </div>
-      </section>
+        </section>
 
-      {error ? <div className={styles.feedbackError}>{error}</div> : null}
-      {notice ? <div className={styles.feedbackSuccess}>{notice}</div> : null}
+        {error ? <p className={styles.feedbackError}>{error}</p> : null}
+        {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
-      <section className={styles.dashboardGrid}>
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}>
+        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Step 1</p>
+                <h2 className={styles.surfaceTitle}>Create a student</h2>
+              </div>
+            </div>
+            <div style={{ padding: "2rem" }}>
+              <form className={styles.formStack} onSubmit={handleCreateUser}>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Student full name</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
+                    placeholder="Aruzhan Sarsen"
+                    required
+                    value={forms.createUser.fullName}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Email</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("createUser", "email", event.target.value)}
+                    placeholder="student@example.com"
+                    required
+                    type="email"
+                    value={forms.createUser.email}
+                  />
+                </label>
+                <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
+                  {busyAction === "create-user" ? "Creating..." : "Create student"}
+                </button>
+              </form>
+            </div>
+          </article>
+
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Step 2</p>
+                <h2 className={styles.surfaceTitle}>Create a course</h2>
+              </div>
+            </div>
+            <div style={{ padding: "2rem" }}>
+              <form className={styles.formStack} onSubmit={handleCreateCourse}>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Course title</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("createCourse", "title", event.target.value)}
+                    placeholder="IELTS Writing Sprint"
+                    required
+                    value={forms.createCourse.title}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Slug</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
+                    placeholder="ielts-writing-sprint"
+                    value={forms.createCourse.slug}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Short description</span>
+                  <textarea
+                    className={styles.fieldTextarea}
+                    onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
+                    placeholder="A short intro for the student dashboard."
+                    required
+                    value={forms.createCourse.shortDescription}
+                  />
+                </label>
+                <button className={styles.solidButton} disabled={busyAction === "create-course"} type="submit">
+                  {busyAction === "create-course" ? "Creating..." : "Create course"}
+                </button>
+              </form>
+            </div>
+          </article>
+        </section>
+
+        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem" }}>
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Step 3</p>
+                <h2 className={styles.surfaceTitle}>Create a lesson and notes</h2>
+              </div>
+            </div>
+            <div style={{ padding: "2rem" }}>
+              <form className={styles.formStack} onSubmit={handleCreateLesson}>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Course</span>
+                  <select
+                    className={styles.fieldSelect}
+                    onChange={(event) => updateForm("lesson", "courseId", event.target.value)}
+                    required
+                    value={forms.lesson.courseId}
+                  >
+                    <option value="">Select course</option>
+                    {data.courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Lesson title</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("lesson", "title", event.target.value)}
+                    placeholder="Lesson 1. Personal statement structure"
+                    required
+                    value={forms.lesson.title}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Lesson slug</span>
+                  <input
+                    className={styles.fieldInput}
+                    onChange={(event) => updateForm("lesson", "slug", event.target.value)}
+                    placeholder="lesson-1-personal-statement-structure"
+                    value={forms.lesson.slug}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Lesson summary</span>
+                  <textarea
+                    className={styles.fieldTextarea}
+                    onChange={(event) => updateForm("lesson", "content", event.target.value)}
+                    placeholder="Short lesson summary shown in the cabinet."
+                    value={forms.lesson.content}
+                  />
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Lesson notes</span>
+                  <textarea
+                    className={styles.fieldTextarea}
+                    onChange={(event) => updateForm("lesson", "notes", event.target.value)}
+                    placeholder="Checklist, vocabulary, university links, or any supporting notes."
+                    value={forms.lesson.notes}
+                  />
+                </label>
+                <button className={styles.solidButton} disabled={busyAction === "create-lesson"} type="submit">
+                  {busyAction === "create-lesson" ? "Saving..." : "Create lesson"}
+                </button>
+              </form>
+            </div>
+          </article>
+
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Step 4</p>
+                <h2 className={styles.surfaceTitle}>Enroll and issue token</h2>
+              </div>
+            </div>
+            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
+              <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Student</span>
+                  <select
+                    className={styles.fieldSelect}
+                    onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
+                    required
+                    value={forms.enrollment.userId}
+                  >
+                    <option value="">Select student</option>
+                    {data.users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.fullName} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Course</span>
+                  <select
+                    className={styles.fieldSelect}
+                    onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
+                    required
+                    value={forms.enrollment.courseId}
+                  >
+                    <option value="">Select course</option>
+                    {data.courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className={styles.outlineButton} disabled={busyAction === "create-enrollment"} type="submit">
+                  {busyAction === "create-enrollment" ? "Assigning..." : "Enroll student"}
+                </button>
+              </form>
+
+              <form className={styles.formStack} onSubmit={handleIssueToken}>
+                <label className={styles.fieldGroup}>
+                  <span className={styles.fieldLabel}>Active enrollment</span>
+                  <select
+                    className={styles.fieldSelect}
+                    onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
+                    required
+                    value={forms.token.enrollmentId}
+                  >
+                    <option value="">Select active enrollment</option>
+                    {activeEnrollments.map((enrollment) => (
+                      <option key={enrollment.id} value={enrollment.id}>
+                        {enrollment.user.fullName} / {enrollment.course.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className={styles.solidButton} disabled={busyAction === "issue-token"} type="submit">
+                  {busyAction === "issue-token" ? "Generating..." : "Generate token"}
+                </button>
+              </form>
+
+              {lastIssuedToken ? (
+                <div className={styles.tokenReveal}>
+                  <p className={styles.surfaceEyebrow}>Latest raw token</p>
+                  <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
+                  <p className={styles.tokenRevealMeta}>
+                    {lastIssuedToken.userEmail} · {lastIssuedToken.courseTitle} · expires{" "}
+                    {formatDateTime(lastIssuedToken.expiresAt)}
+                  </p>
+                  <div className={styles.heroActions}>
+                    <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
+                      {copiedToken === lastIssuedToken.token ? "Copied" : "Copy token"}
+                    </button>
+                    <Link className={styles.outlineButton} href="/securecourse#activation">
+                      Open activation page
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <p className={styles.helperText}>
+                  Generate a token and it will appear here immediately with a copy action.
+                </p>
+              )}
+            </div>
+          </article>
+        </section>
+
+        <section className={styles.surface} style={{ marginTop: "1.25rem" }}>
+          <div className={styles.surfaceHeader}>
             <div>
-              <p className={styles.surfaceEyebrow}>Create student</p>
-              <h2 className={styles.panelTitle}>Student provisioning</h2>
+              <p className={styles.surfaceEyebrow}>Step 5</p>
+              <h2 className={styles.surfaceTitle}>Upload lesson video</h2>
             </div>
           </div>
-          <form className={styles.formStack} onSubmit={handleCreateUser}>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Full name</span>
-              <input
-                className={styles.fieldInput}
-                onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
-                placeholder="Aruzhan Sarsen"
-                required
-                value={forms.createUser.fullName}
-              />
-            </label>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Email</span>
-              <input
-                className={styles.fieldInput}
-                onChange={(event) => updateForm("createUser", "email", event.target.value)}
-                placeholder="student@example.com"
-                required
-                type="email"
-                value={forms.createUser.email}
-              />
-            </label>
-            <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
-              {busyAction === "create-user" ? "Creating..." : "Create student"}
-            </button>
-          </form>
-        </article>
+          <div style={{ padding: "2rem" }} className={styles.gridTwo}>
+            <form className={styles.formStack} onSubmit={handleUploadVideo}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Lesson</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("upload", "lessonId", event.target.value)}
+                  required
+                  value={forms.upload.lessonId}
+                >
+                  <option value="">Select lesson</option>
+                  {lessonOptions.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      {lesson.courseTitle} / {lesson.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Create course</p>
-              <h2 className={styles.panelTitle}>Course publishing</h2>
-            </div>
-          </div>
-          <form className={styles.formStack} onSubmit={handleCreateCourse}>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Title</span>
-              <input
-                className={styles.fieldInput}
-                onChange={(event) => updateForm("createCourse", "title", event.target.value)}
-                placeholder="Secure Python Cohort"
-                required
-                value={forms.createCourse.title}
-              />
-            </label>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Slug</span>
-              <input
-                className={styles.fieldInput}
-                onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
-                placeholder="secure-python-cohort"
-                value={forms.createCourse.slug}
-              />
-            </label>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Short description</span>
-              <textarea
-                className={styles.fieldTextarea}
-                onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
-                placeholder="One-line summary for the student dashboard."
-                required
-                rows={3}
-                value={forms.createCourse.shortDescription}
-              />
-            </label>
-            <button className={styles.solidButton} disabled={busyAction === "create-course"} type="submit">
-              {busyAction === "create-course" ? "Publishing..." : "Create course"}
-            </button>
-          </form>
-        </article>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Provider label</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("upload", "provider", event.target.value)}
+                  value={forms.upload.provider}
+                >
+                  <option value="RAILWAY_LOCAL">Railway local upload</option>
+                  <option value="MUX">Mux style upload intent</option>
+                  <option value="CLOUDFLARE_STREAM">Cloudflare Stream style upload intent</option>
+                </select>
+              </label>
 
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Assign access</p>
-              <h2 className={styles.panelTitle}>Enrollments</h2>
-            </div>
-          </div>
-          <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Student</span>
-              <select
-                className={styles.fieldSelect}
-                onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
-                required
-                value={forms.enrollment.userId}
-              >
-                <option value="">Select student</option>
-                {data.users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.fullName} ({user.email})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Course</span>
-              <select
-                className={styles.fieldSelect}
-                onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
-                required
-                value={forms.enrollment.courseId}
-              >
-                <option value="">Select course</option>
-                {data.courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className={styles.solidButton} disabled={busyAction === "create-enrollment"} type="submit">
-              {busyAction === "create-enrollment" ? "Assigning..." : "Create enrollment"}
-            </button>
-          </form>
-        </article>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Video file</span>
+                <input
+                  ref={fileInputRef}
+                  accept="video/*"
+                  className={styles.fieldInput}
+                  onChange={(event) => setSelectedUploadFile(event.target.files?.[0] || null)}
+                  type="file"
+                />
+              </label>
 
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Issue token</p>
-              <h2 className={styles.panelTitle}>One-time access</h2>
-            </div>
-          </div>
-          <form className={styles.formStack} onSubmit={handleIssueToken}>
-            <label className={styles.fieldGroup}>
-              <span className={styles.fieldLabel}>Active enrollment</span>
-              <select
-                className={styles.fieldSelect}
-                onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
-                required
-                value={forms.token.enrollmentId}
-              >
-                <option value="">Select enrollment</option>
-                {activeEnrollments.map((enrollment) => (
-                  <option key={enrollment.id} value={enrollment.id}>
-                    {enrollment.user.fullName} {"->"} {enrollment.course.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className={styles.solidButton} disabled={busyAction === "issue-token"} type="submit">
-              {busyAction === "issue-token" ? "Issuing..." : "Generate token"}
-            </button>
-          </form>
-
-          {lastIssuedToken ? (
-            <div className={styles.tokenReveal}>
-              <p className={styles.tokenRevealLabel}>Last raw token</p>
-              <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
-              <p className={styles.tokenRevealMeta}>
-                {lastIssuedToken.userEmail} · {lastIssuedToken.courseTitle} · expires{" "}
-                {formatDateTime(lastIssuedToken.expiresAt)}
-              </p>
-              <button className={styles.ghostButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
-                {copiedToken === lastIssuedToken.token ? "Copied" : "Copy token"}
+              <button className={styles.solidButton} disabled={busyAction === "upload-video"} type="submit">
+                {busyAction === "upload-video" ? "Uploading..." : "Upload video"}
               </button>
-            </div>
-          ) : null}
-        </article>
-      </section>
+            </form>
 
-      <section className={styles.dashboardGrid}>
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Users</p>
-              <h2 className={styles.panelTitle}>Students</h2>
+            <div className={styles.callout}>
+              <p className={styles.surfaceEyebrow}>Upload status</p>
+              <h3 className={styles.calloutTitle}>
+                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "No upload started yet"}
+              </h3>
+              <p className={styles.helperText} style={{ color: "var(--text-soft)" }}>
+                Flow: waiting_upload → uploading → processing → ready. After the asset is ready, students can open the
+                lesson and receive playback access.
+              </p>
+              {uploadState ? (
+                <div className={styles.compactList}>
+                  <span>Asset ID: {uploadState.assetId}</span>
+                  <span>File: {uploadState.fileName}</span>
+                  <span className={badgeClass(uploadState.status)}>{uploadState.status}</span>
+                </div>
+              ) : null}
             </div>
           </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading dashboard data...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Name</span>
-                <span>Status</span>
-                <span>Courses</span>
-              </div>
-              {data.users.map((user) => (
-                <div className={styles.dataTableRow} key={user.id}>
-                  <span>
-                    <strong>{user.fullName}</strong>
-                    <small>{user.email}</small>
-                  </span>
-                  <span className={`${styles.statusBadge} ${badgeClass(user.status)}`}>{user.status}</span>
-                  <span>{user.enrollments?.length || 0}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
+        </section>
 
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Courses</p>
-              <h2 className={styles.panelTitle}>Published courses</h2>
-            </div>
-          </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading courses...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Course</span>
-                <span>Status</span>
-                <span>Lessons</span>
+        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem" }}>
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Students and courses</p>
+                <h2 className={styles.surfaceTitle}>Current catalog</h2>
               </div>
-              {data.courses.map((course) => (
-                <div className={styles.dataTableRow} key={course.id}>
-                  <span>
-                    <strong>{course.title}</strong>
-                    <small>{course.slug}</small>
-                  </span>
-                  <span className={`${styles.statusBadge} ${badgeClass(course.status)}`}>{course.status}</span>
-                  <span>{course.lessons?.length || 0}</span>
-                </div>
-              ))}
             </div>
-          )}
-        </article>
-      </section>
+            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
+              <div className={styles.surfaceGrid}>
+                <p className={styles.surfaceEyebrow}>Students</p>
+                {loading && !data.users.length ? (
+                  <p className={styles.helperText}>Loading students...</p>
+                ) : data.users.length ? (
+                  <div className={styles.compactList}>
+                    {data.users.map((user) => (
+                      <div className={styles.materialCard} key={user.id}>
+                        <strong>{user.fullName}</strong>
+                        <p className={styles.helperText}>{user.email}</p>
+                        <span className={badgeClass(user.status)}>{user.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.helperText}>No students yet.</p>
+                )}
+              </div>
 
-      <section className={styles.dashboardGrid}>
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Tokens</p>
-              <h2 className={styles.panelTitle}>Access control</h2>
-            </div>
-          </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading tokens...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Student</span>
-                <span>Status</span>
-                <span>Expiry</span>
-                <span>Actions</span>
+              <div className={styles.surfaceGrid}>
+                <p className={styles.surfaceEyebrow}>Courses</p>
+                {loading && !data.courses.length ? (
+                  <p className={styles.helperText}>Loading courses...</p>
+                ) : data.courses.length ? (
+                  <div className={styles.compactList}>
+                    {data.courses.map((course) => (
+                      <div className={styles.materialCard} key={course.id}>
+                        <strong>{course.title}</strong>
+                        <p className={styles.helperText}>{course.shortDescription || "Course description pending."}</p>
+                        <div className={styles.compactList}>
+                          {(course.lessons || []).map((lesson) => (
+                            <span key={lesson.id}>
+                              {lesson.title} <span className={badgeClass(lesson.status)}>{lesson.status}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.helperText}>No courses yet.</p>
+                )}
               </div>
-              {data.tokens.map((token) => (
-                <div className={styles.dataTableRow} key={token.id}>
-                  <span>
-                    <strong>{token.user?.email || "Unknown"}</strong>
-                    <small>{token.enrollment?.course?.title || "No course"}</small>
-                  </span>
-                  <span className={`${styles.statusBadge} ${badgeClass(token.status)}`}>{token.status}</span>
-                  <span>{formatDateTime(token.activationExpiresAt)}</span>
-                  <span>
-                    {token.status === "ISSUED" ? (
-                      <button
-                        className={styles.inlineLinkButton}
-                        disabled={busyAction === `revoke-token-${token.id}`}
-                        onClick={() => handleRevokeToken(token.id)}
-                        type="button"
-                      >
-                        Revoke
-                      </button>
-                    ) : (
-                      <span className={styles.helperText}>No action</span>
-                    )}
-                  </span>
-                </div>
-              ))}
             </div>
-          )}
-        </article>
+          </article>
 
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Sessions</p>
-              <h2 className={styles.panelTitle}>Active student sessions</h2>
-            </div>
-          </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading sessions...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Student</span>
-                <span>Status</span>
-                <span>Last seen</span>
-                <span>Actions</span>
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Tokens and sessions</p>
+                <h2 className={styles.surfaceTitle}>Live access control</h2>
               </div>
-              {data.sessions.map((session) => (
-                <div className={styles.dataTableRow} key={session.id}>
-                  <span>
-                    <strong>{session.user?.email || "Unknown"}</strong>
-                    <small>{session.deviceLabel || "Browser session"}</small>
-                  </span>
-                  <span className={`${styles.statusBadge} ${badgeClass(session.status)}`}>{session.status}</span>
-                  <span>{formatDateTime(session.lastSeenAt)}</span>
-                  <span>
-                    {session.status === "ACTIVE" ? (
-                      <button
-                        className={styles.inlineLinkButton}
-                        disabled={busyAction === `revoke-session-${session.id}`}
-                        onClick={() => handleRevokeSession(session.id)}
-                        type="button"
-                      >
-                        Revoke
-                      </button>
-                    ) : (
-                      <span className={styles.helperText}>No action</span>
-                    )}
-                  </span>
-                </div>
-              ))}
             </div>
-          )}
-        </article>
-      </section>
+            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
+              <div className={styles.surfaceGrid}>
+                <p className={styles.surfaceEyebrow}>Tokens</p>
+                {loading && !data.tokens.length ? (
+                  <p className={styles.helperText}>Loading tokens...</p>
+                ) : data.tokens.length ? (
+                  <div className={styles.miniTable}>
+                    <div className={styles.miniTableHeader}>
+                      <span>Student</span>
+                      <span>Status</span>
+                      <span>Expires</span>
+                      <span>Action</span>
+                    </div>
+                    {data.tokens.map((token) => (
+                      <div className={styles.miniTableRow} key={token.id}>
+                        <span>
+                          <strong>{token.user?.fullName || token.user?.email || "Student"}</strong>
+                          <small>{token.enrollment?.course?.title || "Course"}</small>
+                        </span>
+                        <span className={badgeClass(token.status)}>{token.status}</span>
+                        <span>{formatDateTime(token.activationExpiresAt)}</span>
+                        <span>
+                          {token.status === "ISSUED" ? (
+                            <button
+                              className={styles.inlineLinkButton}
+                              disabled={busyAction === `revoke-token-${token.id}`}
+                              onClick={() => handleRevokeToken(token.id)}
+                              type="button"
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span className={styles.helperText}>-</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.helperText}>No tokens issued yet.</p>
+                )}
+              </div>
 
-      <section className={styles.dashboardGrid}>
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Video pipeline</p>
-              <h2 className={styles.panelTitle}>Protected assets</h2>
-            </div>
-          </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading uploads...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Lesson</span>
-                <span>Status</span>
-                <span>Provider</span>
+              <div className={styles.surfaceGrid}>
+                <p className={styles.surfaceEyebrow}>Sessions</p>
+                {loading && !data.sessions.length ? (
+                  <p className={styles.helperText}>Loading sessions...</p>
+                ) : data.sessions.length ? (
+                  <div className={styles.miniTable}>
+                    <div className={styles.miniTableHeader}>
+                      <span>Student</span>
+                      <span>Status</span>
+                      <span>Last seen</span>
+                      <span>Action</span>
+                    </div>
+                    {data.sessions.map((session) => (
+                      <div className={styles.miniTableRow} key={session.id}>
+                        <span>
+                          <strong>{session.user?.fullName || session.user?.email || "Student"}</strong>
+                          <small>{session.deviceLabel || "Web browser"}</small>
+                        </span>
+                        <span className={badgeClass(session.status)}>{session.status}</span>
+                        <span>{formatDateTime(session.lastSeenAt)}</span>
+                        <span>
+                          {session.status === "ACTIVE" ? (
+                            <button
+                              className={styles.inlineLinkButton}
+                              disabled={busyAction === `revoke-session-${session.id}`}
+                              onClick={() => handleRevokeSession(session.id)}
+                              type="button"
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span className={styles.helperText}>-</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.helperText}>No active student sessions yet.</p>
+                )}
               </div>
-              {data.uploads.map((asset) => (
-                <div className={styles.dataTableRow} key={asset.id}>
-                  <span>
-                    <strong>{asset.lessonTitle || "Lesson video"}</strong>
-                    <small>{asset.playbackId || asset.assetId || "pending asset"}</small>
-                  </span>
-                  <span className={`${styles.statusBadge} ${badgeClass(asset.status)}`}>{asset.status}</span>
-                  <span>{asset.provider}</span>
-                </div>
-              ))}
             </div>
-          )}
-        </article>
+          </article>
+        </section>
 
-        <article className={styles.panelWide}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Audit</p>
-              <h2 className={styles.panelTitle}>Recent events</h2>
-            </div>
-          </div>
-          {loading ? (
-            <p className={styles.helperText}>Loading logs...</p>
-          ) : (
-            <div className={styles.dataTable}>
-              <div className={styles.dataTableHead}>
-                <span>Event</span>
-                <span>Actor</span>
-                <span>When</span>
+        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem", paddingBottom: "3rem" }}>
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Video assets</p>
+                <h2 className={styles.surfaceTitle}>Upload pipeline</h2>
               </div>
-              {data.logs.map((log) => (
-                <div className={styles.dataTableRow} key={log.id}>
-                  <span>
-                    <strong>{log.eventType}</strong>
-                    <small>{log.entityType || "system"}</small>
-                  </span>
-                  <span>{log.actorType}</span>
-                  <span>{formatDateTime(log.createdAt)}</span>
-                </div>
-              ))}
             </div>
-          )}
-        </article>
-      </section>
+            <div style={{ padding: "2rem" }}>
+              {loading && !data.uploads.length ? (
+                <p className={styles.helperText}>Loading uploads...</p>
+              ) : data.uploads.length ? (
+                <div className={styles.miniTable}>
+                  <div className={styles.miniTableHeader}>
+                    <span>Lesson</span>
+                    <span>Status</span>
+                    <span>Provider</span>
+                    <span>Updated</span>
+                  </div>
+                  {data.uploads.map((asset) => (
+                    <div className={styles.miniTableRow} key={asset.id}>
+                      <span>
+                        <strong>{asset.lessonTitle || "Lesson video"}</strong>
+                        <small>{asset.courseTitle || "Course"}</small>
+                      </span>
+                      <span className={badgeClass(asset.status)}>{asset.status}</span>
+                      <span>{asset.provider}</span>
+                      <span>{formatDateTime(asset.updatedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.helperText}>No video assets yet.</p>
+              )}
+            </div>
+          </article>
+
+          <article className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Audit log</p>
+                <h2 className={styles.surfaceTitle}>Recent actions</h2>
+              </div>
+            </div>
+            <div style={{ padding: "2rem" }}>
+              {loading && !data.logs.length ? (
+                <p className={styles.helperText}>Loading recent activity...</p>
+              ) : data.logs.length ? (
+                <div className={styles.compactList}>
+                  {data.logs.slice(0, 10).map((log) => (
+                    <div className={styles.materialCard} key={log.id}>
+                      <strong>{log.eventType}</strong>
+                      <p className={styles.helperText}>
+                        {log.actorType} · {log.entityType || "system"} · {formatDateTime(log.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.helperText}>No audit events yet.</p>
+              )}
+            </div>
+          </article>
+        </section>
+      </div>
     </main>
   );
 }

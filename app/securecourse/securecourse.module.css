@@ -475,11 +475,31 @@
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.fieldInput:focus {
+.fieldInput:focus,
+.fieldSelect:focus,
+.fieldTextarea:focus {
   outline: none;
   border-color: var(--accent-secondary);
   background: rgba(15, 23, 42, 0.6);
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2), inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.fieldSelect,
+.fieldTextarea {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  color: #fff;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.fieldTextarea {
+  min-height: 140px;
+  resize: vertical;
 }
 
 .feedbackError {
@@ -675,6 +695,121 @@
   font-size: 0.9rem;
 }
 
+.surfaceGrid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.gridThree {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.miniTable {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.miniTableHeader,
+.miniTableRow {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 0.9fr 0.8fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.miniTableHeader {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 0.25rem;
+}
+
+.miniTableRow {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.miniTableRow strong,
+.miniTableRow small {
+  display: block;
+}
+
+.miniTableRow small {
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.tokenReveal {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.12), rgba(15, 23, 42, 0.35));
+}
+
+.tokenRevealValue {
+  display: block;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(2, 6, 23, 0.9);
+  color: #f8fafc;
+  font-size: 1rem;
+  word-break: break-all;
+}
+
+.tokenRevealMeta {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.inlineLinkButton {
+  background: transparent;
+  border: none;
+  color: #7dd3fc;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.inlineLinkButton:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.statusMeta {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.videoFrame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.9);
+}
+
+.materialCard {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 /* Steps Grid */
 .flowGrid {
   display: grid;
@@ -776,6 +911,7 @@
   .workspaceShell { grid-template-columns: 1fr; padding: 1.5rem; gap: 2rem; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--line); padding-right: 0; padding-bottom: 2rem; display: flex; flex-direction: column; align-items: center; }
   .adminColumns { grid-template-columns: 1fr !important; }
+  .gridTwo, .gridThree { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
@@ -783,4 +919,8 @@
   .metricStrip { flex-direction: column; }
   .topbar { flex-direction: column; text-align: center; }
   .topnav { display: none; }
+  .miniTableHeader { display: none; }
+  .miniTableRow {
+    grid-template-columns: 1fr;
+  }
 }
