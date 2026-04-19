@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "SecureCourse — Protected Learning Platform",
   description:
@@ -6,8 +8,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, padding: 0, boxSizing: "border-box", background: "#020617" }}>
+    <html lang="en" className="dark">
+      <body>
         {children}
       </body>
     </html>
