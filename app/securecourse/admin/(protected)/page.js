@@ -66,6 +66,31 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function SessionTimer({ startedAt, status }) {
+  const [elapsed, setElapsed] = useState("");
+
+  useEffect(() => {
+    if (status !== "ACTIVE") {
+      setElapsed("");
+      return;
+    }
+    const update = () => {
+      const diff = Math.floor((Date.now() - new Date(startedAt || Date.now()).getTime()) / 1000);
+      if (diff < 0) return;
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      setElapsed(`( ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} )`);
+    };
+    update();
+    const inv = setInterval(update, 1000);
+    return () => clearInterval(inv);
+  }, [startedAt, status]);
+
+  if (status !== "ACTIVE" || !elapsed) return null;
+  return <span style={{ marginLeft: "8px", marginRight: "4px", fontVariantNumeric: "tabular-nums", opacity: 0.6, fontSize: "0.85em" }}>{elapsed}</span>;
+}
+
 export default function SecureCourseAdminPage() {
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -404,7 +429,7 @@ export default function SecureCourseAdminPage() {
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
-        activationExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        activationExpiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
         note: "Выдан из админки SecureCourse"
       });
 
@@ -1166,8 +1191,9 @@ export default function SecureCourseAdminPage() {
                   <div className={styles.miniTableRow} key={session.id}>
                     <strong>{session.user?.fullName || session.userId}</strong>
                     <small>{formatDateTime(session.startedAt || session.createdAt)}</small>
-                    <small>
-                      <span className={badgeClass(session.status)}>{session.status}</span>{" "}
+                    <small style={{ display: 'flex', alignItems: 'center' }}>
+                      <span className={badgeClass(session.status)}>{session.status}</span>
+                      <SessionTimer startedAt={session.startedAt || session.createdAt} status={session.status} />
                       <button
                         className={styles.inlineLinkButton}
                         disabled={busyAction === `revoke-session-${session.id}` || session.status !== "ACTIVE"}
