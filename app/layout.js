@@ -1,17 +1,15 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "SecureCourse — Protected Learning Platform",
+  title: "Global Admissions Academy - IELTS и поступление за рубеж",
   description:
-    "SecureCourse is a web platform for protected online courses with one-time token access, single-session enforcement, and secure video playback."
+    "Веб-платформа для курсов по IELTS, английскому, scholarship essays, personal statement и поступлению за рубеж с доступом по одноразовому токену."
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark">
-      <body>
-        {children}
-      </body>
+    <html lang="ru" className="dark">
+      <body>{children}</body>
     </html>
   );
 }
