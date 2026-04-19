@@ -80,9 +80,9 @@ function LoginForm() {
       </form>
 
       <ul className={styles.ruleList} style={{ marginTop: "1.25rem" }}>
-        <li>Bootstrap admin credentials live in the backend env.</li>
-        <li>Set `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` for local runtime or Render.</li>
-        <li>Set `SECURECOURSE_API_URL` in the frontend env so Vercel can reach the public NestJS backend.</li>
+        <li>Bootstrap admin credentials come from `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.</li>
+        <li>This Railway deploy runs as one Next.js service, so no separate API URL is required.</li>
+        <li>Students do not use this screen. They activate one-time tokens on the public SecureCourse page.</li>
         <li>The browser stores only an HTTP-only admin session cookie.</li>
       </ul>
     </section>
