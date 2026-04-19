@@ -63,10 +63,10 @@ export default function SecureCourseActivationPanel() {
         sessionId: payload.session.id
       });
       setToken("");
-      setNotice("Access activated. Redirecting to the student cabinet.");
+      setNotice("Токен активирован. Открываем кабинет ученика.");
       router.push("/securecourse/student");
     } catch (requestError) {
-      setError(requestError.message || "Activation failed.");
+      setError(requestError.message || "Не удалось активировать токен.");
     } finally {
       setLoading(false);
     }
@@ -86,9 +86,9 @@ export default function SecureCourseActivationPanel() {
         userId: "",
         sessionId: ""
       });
-      setNotice("The current student session has been closed.");
+      setNotice("Текущая сессия ученика завершена.");
     } catch (requestError) {
-      setError(requestError.message || "Logout failed.");
+      setError(requestError.message || "Не удалось завершить сессию.");
     } finally {
       setLoading(false);
     }
@@ -98,23 +98,23 @@ export default function SecureCourseActivationPanel() {
     <section className={styles.surface} id="activation">
       <div className={styles.surfaceHeader}>
         <div>
-          <p className={styles.surfaceEyebrow}>Token activation</p>
-          <h2 className={styles.surfaceTitle}>Paste the one-time token to open student access.</h2>
+          <p className={styles.surfaceEyebrow}>Активация доступа</p>
+          <h2 className={styles.surfaceTitle}>Введите одноразовый токен, чтобы открыть кабинет ученика.</h2>
         </div>
         <p className={styles.helperText} style={{ maxWidth: "34rem", color: "var(--text-soft)" }}>
-          Students do not sign up with email and password. A manager creates the student, enrolls them, issues a
-          one-time token, and the token opens exactly one active session.
+          Ученики не создают аккаунт сами. Менеджер создает ученика, назначает курс, выдает токен и отправляет его в
+          WhatsApp, Telegram или email.
         </p>
       </div>
 
       <div className={styles.gridTwo} style={{ padding: "2rem" }}>
         <form className={styles.formStack} onSubmit={handleActivate}>
           <label className={styles.fieldGroup}>
-            <span className={styles.fieldLabel}>One-time token</span>
+            <span className={styles.fieldLabel}>Одноразовый токен</span>
             <input
               className={styles.fieldInput}
               onChange={(event) => setToken(event.target.value)}
-              placeholder="Paste the token from the admin panel"
+              placeholder="Вставьте токен из админки"
               required
               type="text"
               value={token}
@@ -123,11 +123,11 @@ export default function SecureCourseActivationPanel() {
 
           <div className={styles.heroActions}>
             <button className={styles.solidButton} disabled={loading || !token} type="submit">
-              {loading ? "Activating..." : "Activate access"}
+              {loading ? "Активируем..." : "Активировать доступ"}
             </button>
             {session.authenticated ? (
               <button className={styles.outlineButton} onClick={handleLogout} type="button">
-                End current session
+                Завершить текущую сессию
               </button>
             ) : null}
           </div>
@@ -136,15 +136,15 @@ export default function SecureCourseActivationPanel() {
           {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
           <p className={styles.helperText}>
-            The token becomes `USED` after successful activation. To enter again after logout, the student needs a new
-            token from the manager.
+            После успешной активации токен становится `USED`. Для повторного входа после logout нужен новый токен от
+            менеджера.
           </p>
         </form>
 
         <div className={styles.callout}>
-          <p className={styles.surfaceEyebrow}>Current state</p>
+          <p className={styles.surfaceEyebrow}>Текущее состояние</p>
           <h3 className={styles.calloutTitle}>
-            {session.authenticated ? "A student session is active" : "No active student session yet"}
+            {session.authenticated ? "Сессия ученика уже активна" : "Пока нет активной ученической сессии"}
           </h3>
 
           {activation ? (
@@ -154,26 +154,26 @@ export default function SecureCourseActivationPanel() {
               </span>
               <span>{activation.user.email}</span>
               <span>Session ID: {activation.session.id}</span>
-              <span>Course: {activation.enrollment.course?.title || "Assigned course"}</span>
+              <span>Курс: {activation.enrollment.course?.title || "Назначенный курс"}</span>
             </div>
           ) : session.authenticated ? (
             <div className={styles.compactList}>
-              <span>{session.user?.fullName || "Student session"}</span>
+              <span>{session.user?.fullName || "Активная сессия"}</span>
               <span>User ID: {session.userId}</span>
               <span>Session ID: {session.sessionId}</span>
             </div>
           ) : (
             <p className={styles.helperText}>
-              Start in the admin panel: create a student, assign a course, generate a token, and send it to the student.
+              Начните с админки: создайте ученика, назначьте курс, выпустите токен и отправьте его ученику.
             </p>
           )}
 
           <div className={styles.heroActions}>
             <Link className={styles.solidButton} href="/securecourse/student">
-              Open student cabinet
+              Открыть кабинет ученика
             </Link>
             <Link className={styles.outlineButton} href="/securecourse/admin/login">
-              Open admin panel
+              Открыть админку
             </Link>
           </div>
         </div>

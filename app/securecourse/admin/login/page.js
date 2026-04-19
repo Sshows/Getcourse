@@ -27,25 +27,26 @@ function LoginForm() {
 
       window.location.assign(redirectTo);
     } catch (requestError) {
-      setError(requestError.message || "Admin login failed.");
+      setError(requestError.message || "Не удалось выполнить вход.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <section className={styles.callout} style={{ width: "100%", maxWidth: "440px" }}>
-      <p className={styles.surfaceEyebrow}>Админ-доступ</p>
+    <section className={styles.callout} style={{ width: "100%", maxWidth: "460px" }}>
+      <p className={styles.surfaceEyebrow}>Вход для команды</p>
       <h1 className={styles.calloutTitle} style={{ marginBottom: "1rem" }}>
-        Вход в панель управления
+        Авторизация в админке SecureCourse
       </h1>
       <p className={styles.helperText} style={{ marginBottom: "1.2rem" }}>
-        Только для сотрудников и кураторов. Студенты заходят по одноразовым токенам на главной странице.
+        Здесь входят только администратор и менеджер. Ученики не используют логин и пароль - им выдается
+        одноразовый токен на публичной странице.
       </p>
 
       <form className={styles.formStack} onSubmit={handleSubmit}>
         <label className={styles.fieldGroup}>
-          <span className={styles.fieldLabel}>Логин или Email</span>
+          <span className={styles.fieldLabel}>Логин или email</span>
           <input
             className={styles.fieldInput}
             onChange={(event) => setLogin(event.target.value)}
@@ -76,13 +77,19 @@ function LoginForm() {
           style={{ width: "100%", justifyContent: "center" }}
           type="submit"
         >
-          {loading ? "Авторизация..." : "Войти"}
+          {loading ? "Входим..." : "Войти в админку"}
         </button>
-        
-        <div style={{ marginTop: "1rem", textAlign: "center" }}>
-           <Link href="/securecourse" className={styles.inlineLinkButton}>
-             Вернуться на главную страницу (для студентов)
-           </Link>
+
+        <div className={styles.compactList} style={{ marginTop: "1rem" }}>
+          <Link className={styles.inlineLinkButton} href="/securecourse">
+            На главную
+          </Link>
+          <Link className={styles.inlineLinkButton} href="/securecourse">
+            Открыть публичную страницу
+          </Link>
+          <Link className={styles.inlineLinkButton} href="/securecourse">
+            Назад к сайту
+          </Link>
         </div>
       </form>
     </section>

@@ -42,7 +42,7 @@ function formatDateTime(value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
@@ -111,7 +111,7 @@ export default function SecureCourseStudentPage() {
         userId: "",
         sessionId: ""
       });
-      setError(requestError.message || "Could not verify the student session.");
+      setError(requestError.message || "Не удалось проверить ученическую сессию.");
     }
   }
 
@@ -164,7 +164,7 @@ export default function SecureCourseStudentPage() {
         const playbackPayload = await requestPlaybackAccess(lessonId);
         playback = playbackPayload.playback;
       } catch (requestError) {
-        playbackError = requestError.message || "Video is not ready yet.";
+        playbackError = requestError.message || "Видео еще не готово.";
       }
 
       setLessonState({
@@ -182,7 +182,7 @@ export default function SecureCourseStudentPage() {
         enrollment: null,
         progress: null,
         playback: null,
-        error: requestError.message || "Could not load the lesson."
+        error: requestError.message || "Не удалось открыть урок."
       });
     }
   }
@@ -202,11 +202,11 @@ export default function SecureCourseStudentPage() {
         completed: true,
         lastPositionSeconds: lessonState.progress?.lastPositionSeconds || 0
       });
-      setNotice("Lesson marked as completed.");
+      setNotice("Прогресс обновлен. Урок отмечен как завершенный.");
       await loadCourses();
       await openLesson(lessonState.lesson.id);
     } catch (requestError) {
-      setError(requestError.message || "Could not update progress.");
+      setError(requestError.message || "Не удалось обновить прогресс.");
     } finally {
       setBusyAction("");
     }
@@ -237,7 +237,7 @@ export default function SecureCourseStudentPage() {
         error: ""
       });
     } catch (requestError) {
-      setError(requestError.message || "Could not close the session.");
+      setError(requestError.message || "Не удалось завершить сессию.");
     } finally {
       setBusyAction("");
     }
@@ -249,9 +249,9 @@ export default function SecureCourseStudentPage() {
         <div className={s.ambient} aria-hidden="true" />
         <div className={s.shell}>
           <section className={s.callout}>
-            <p className={s.surfaceEyebrow}>Checking access</p>
-            <h1 className={s.calloutTitle}>Verifying the active student session.</h1>
-            <p className={s.helperText}>If the token was already activated, the cabinet will open automatically.</p>
+            <p className={s.surfaceEyebrow}>Проверяем доступ</p>
+            <h1 className={s.calloutTitle}>Смотрим, есть ли активная сессия ученика.</h1>
+            <p className={s.helperText}>Если токен уже был активирован, кабинет откроется автоматически.</p>
           </section>
         </div>
       </main>
@@ -264,19 +264,19 @@ export default function SecureCourseStudentPage() {
         <div className={s.ambient} aria-hidden="true" />
         <div className={s.shell}>
           <section className={s.callout}>
-            <p className={s.surfaceEyebrow}>Token-only access</p>
-            <h1 className={s.calloutTitle}>Activate a one-time token before opening the student cabinet.</h1>
+            <p className={s.surfaceEyebrow}>Только по токену</p>
+            <h1 className={s.calloutTitle}>Сначала активируйте одноразовый токен на публичной странице.</h1>
             <p className={s.helperText} style={{ color: "var(--text-soft)" }}>
-              Students do not use a regular password. The manager sends a one-time token from the admin panel, and that
-              token opens the session for the assigned English or admissions courses.
+              Ученики не используют обычный логин и пароль. Менеджер выдает токен, а токен открывает доступ к
+              назначенным курсам по IELTS, английскому и admission documents.
             </p>
             {error ? <p className={s.feedbackError}>{error}</p> : null}
             <div className={s.heroActions}>
               <Link className={s.solidButton} href="/securecourse">
-                Activate token
+                Активировать токен
               </Link>
               <Link className={s.outlineButton} href="/securecourse/admin/login">
-                Admin login
+                Вход для команды
               </Link>
             </div>
           </section>
@@ -292,36 +292,36 @@ export default function SecureCourseStudentPage() {
         <section className={s.surface}>
           <div className={s.surfaceHeader}>
             <div>
-              <p className={s.surfaceEyebrow}>Student cabinet</p>
+              <p className={s.surfaceEyebrow}>Кабинет ученика</p>
               <h1 className={s.surfaceTitle}>
-                {session.user?.fullName || "Student"} can view assigned English and study abroad lessons.
+                {session.user?.fullName || "Ученик"}, здесь ваши курсы по английскому и поступлению.
               </h1>
             </div>
             <div className={s.heroActions}>
               <Link className={s.outlineButton} href="/securecourse">
-                Activate another token
+                Активировать другой токен
               </Link>
               <button className={s.solidButton} disabled={busyAction === "logout"} onClick={handleLogout} type="button">
-                {busyAction === "logout" ? "Closing..." : "Logout"}
+                {busyAction === "logout" ? "Завершаем..." : "Выйти"}
               </button>
             </div>
           </div>
 
           <div className={s.gridThree} style={{ padding: "2rem" }}>
             <div className={s.materialCard}>
-              <p className={s.surfaceEyebrow}>Student</p>
-              <strong>{session.user?.fullName || "Student account"}</strong>
-              <p className={s.helperText}>{session.user?.email || "Assigned by manager"}</p>
+              <p className={s.surfaceEyebrow}>Ученик</p>
+              <strong>{session.user?.fullName || "Ученический доступ"}</strong>
+              <p className={s.helperText}>{session.user?.email || "Назначено менеджером"}</p>
             </div>
             <div className={s.materialCard}>
-              <p className={s.surfaceEyebrow}>Session</p>
+              <p className={s.surfaceEyebrow}>Сессия</p>
               <strong>{session.sessionId}</strong>
-              <p className={s.helperText}>Heartbeat keeps the session alive every 60 seconds.</p>
+              <p className={s.helperText}>Heartbeat обновляет сессию каждые 60 секунд.</p>
             </div>
             <div className={s.materialCard}>
-              <p className={s.surfaceEyebrow}>Courses</p>
+              <p className={s.surfaceEyebrow}>Курсы</p>
               <strong>{courses.length}</strong>
-              <p className={s.helperText}>Only currently assigned courses are visible.</p>
+              <p className={s.helperText}>Видны только назначенные программы.</p>
             </div>
           </div>
         </section>
@@ -333,14 +333,14 @@ export default function SecureCourseStudentPage() {
           <div className={s.surface}>
             <div className={s.surfaceHeader}>
               <div>
-                <p className={s.surfaceEyebrow}>Assigned courses</p>
-                <h2 className={s.surfaceTitle}>Choose a course and lesson.</h2>
+                <p className={s.surfaceEyebrow}>Назначенные курсы</p>
+                <h2 className={s.surfaceTitle}>Выберите курс и откройте урок.</h2>
               </div>
             </div>
 
             <div style={{ padding: "2rem" }}>
               {!courses.length ? (
-                <p className={s.helperText}>No active enrollments yet. Ask your manager to assign a course.</p>
+                <p className={s.helperText}>Пока нет активных зачислений. Попросите менеджера назначить курс.</p>
               ) : (
                 <div className={s.compactList}>
                   {courses.map((enrollment) => (
@@ -371,7 +371,7 @@ export default function SecureCourseStudentPage() {
               {selectedCourse ? (
                 <div style={{ marginTop: "1.5rem" }}>
                   <p className={s.helperText} style={{ color: "var(--text-soft)", marginBottom: "1rem" }}>
-                    {selectedCourse.shortDescription || "This course contains guided lessons and downloadable notes."}
+                    {selectedCourse.shortDescription || "Курс содержит уроки, видео и материалы."}
                   </p>
                   <div className={s.compactList}>
                     {lessons.map((lesson) => (
@@ -395,26 +395,26 @@ export default function SecureCourseStudentPage() {
           <div className={s.surface}>
             <div className={s.surfaceHeader}>
               <div>
-                <p className={s.surfaceEyebrow}>Lesson view</p>
+                <p className={s.surfaceEyebrow}>Урок</p>
                 <h2 className={s.surfaceTitle}>
-                  {lessonState.lesson ? lessonState.lesson.title : "Select a lesson to open the player and notes."}
+                  {lessonState.lesson ? lessonState.lesson.title : "Выберите урок, чтобы открыть видео и материалы."}
                 </h2>
               </div>
             </div>
 
             <div style={{ padding: "2rem", display: "grid", gap: "1.25rem" }}>
-              {lessonState.loading ? <p className={s.helperText}>Loading lesson and playback access...</p> : null}
+              {lessonState.loading ? <p className={s.helperText}>Загружаем урок и доступ к видео...</p> : null}
 
               {!lessonState.loading && !lessonState.lesson ? (
-                <p className={s.helperText}>The lesson details, video, and materials will appear here.</p>
+                <p className={s.helperText}>Здесь появятся видео, конспект и прогресс по выбранному уроку.</p>
               ) : null}
 
               {lessonState.lesson ? (
                 <>
                   <div className={s.compactList}>
-                    <span>Course: {lessonState.lesson.course?.title || "Assigned course"}</span>
-                    <span>Progress: {lessonState.progress?.progressPercent ?? 0}%</span>
-                    <span>Last watched: {formatDateTime(lessonState.progress?.lastWatchedAt)}</span>
+                    <span>Курс: {lessonState.lesson.course?.title || "Назначенный курс"}</span>
+                    <span>Прогресс: {lessonState.progress?.progressPercent ?? 0}%</span>
+                    <span>Последний просмотр: {formatDateTime(lessonState.progress?.lastWatchedAt)}</span>
                   </div>
 
                   <div className={s.videoFrame}>
@@ -428,14 +428,14 @@ export default function SecureCourseStudentPage() {
                       />
                     ) : (
                       <div style={{ padding: "2rem", minHeight: "18rem", display: "grid", placeItems: "center" }}>
-                        <p className={s.helperText}>{lessonState.error || "Video is not ready yet."}</p>
+                        <p className={s.helperText}>{lessonState.error || "Видео еще не готово."}</p>
                       </div>
                     )}
                   </div>
 
                   {lessonState.lesson.content ? (
                     <div className={s.materialCard}>
-                      <p className={s.surfaceEyebrow}>Lesson summary</p>
+                      <p className={s.surfaceEyebrow}>О чем урок</p>
                       <p className={s.helperText} style={{ color: "var(--text-soft)", whiteSpace: "pre-wrap" }}>
                         {lessonState.lesson.content}
                       </p>
@@ -443,18 +443,18 @@ export default function SecureCourseStudentPage() {
                   ) : null}
 
                   <div className={s.surfaceGrid}>
-                    <p className={s.surfaceEyebrow}>Materials</p>
+                    <p className={s.surfaceEyebrow}>Материалы</p>
                     {lessonState.lesson.materials?.length ? (
                       lessonState.lesson.materials.map((material) => (
                         <div className={s.materialCard} key={material.id}>
                           <strong>{material.title}</strong>
                           <p className={s.helperText} style={{ color: "var(--text-soft)", marginTop: "0.5rem" }}>
-                            {material.content || material.url || "Material attached to this lesson."}
+                            {material.content || material.url || "Материал прикреплен к уроку."}
                           </p>
                         </div>
                       ))
                     ) : (
-                      <p className={s.helperText}>No materials yet for this lesson.</p>
+                      <p className={s.helperText}>Для этого урока пока нет дополнительных материалов.</p>
                     )}
                   </div>
 
@@ -465,7 +465,7 @@ export default function SecureCourseStudentPage() {
                       onClick={markCompleted}
                       type="button"
                     >
-                      {busyAction === "complete-lesson" ? "Saving..." : "Mark lesson as completed"}
+                      {busyAction === "complete-lesson" ? "Сохраняем..." : "Отметить урок завершенным"}
                     </button>
                   </div>
                 </>

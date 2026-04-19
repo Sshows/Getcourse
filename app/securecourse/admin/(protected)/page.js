@@ -48,7 +48,7 @@ function formatDateTime(value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
@@ -122,9 +122,19 @@ export default function SecureCourseAdminPage() {
     }
   });
 
+  const students = useMemo(
+    () => [...data.users].sort((left, right) => left.fullName.localeCompare(right.fullName, "ru")),
+    [data.users]
+  );
+
+  const courses = useMemo(
+    () => [...data.courses].sort((left, right) => left.title.localeCompare(right.title, "en")),
+    [data.courses]
+  );
+
   const lessonOptions = useMemo(
     () =>
-      data.courses.flatMap((course) =>
+      courses.flatMap((course) =>
         (course.lessons || []).map((lesson) => ({
           id: lesson.id,
           title: lesson.title,
@@ -133,12 +143,12 @@ export default function SecureCourseAdminPage() {
           courseTitle: course.title
         }))
       ),
-    [data.courses]
+    [courses]
   );
 
   const activeEnrollments = useMemo(
     () =>
-      data.users.flatMap((user) =>
+      students.flatMap((user) =>
         (user.enrollments || [])
           .filter((enrollment) => enrollment.status === "ACTIVE")
           .map((enrollment) => ({
@@ -146,7 +156,7 @@ export default function SecureCourseAdminPage() {
             user
           }))
       ),
-    [data.users]
+    [students]
   );
 
   const selectedUploadLesson = useMemo(
@@ -174,7 +184,7 @@ export default function SecureCourseAdminPage() {
         return null;
       }
 
-      setError(requestError.message || "Failed to load the admin dashboard.");
+      setError(requestError.message || "Не удалось загрузить админку.");
       return null;
     } finally {
       if (showSpinner) {
@@ -188,16 +198,16 @@ export default function SecureCourseAdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!forms.lesson.courseId && data.courses[0]?.id) {
-      updateForm("lesson", "courseId", data.courses[0].id);
+    if (!forms.lesson.courseId && courses[0]?.id) {
+      updateForm("lesson", "courseId", courses[0].id);
     }
 
-    if (!forms.enrollment.userId && data.users[0]?.id) {
-      updateForm("enrollment", "userId", data.users[0].id);
+    if (!forms.enrollment.userId && students[0]?.id) {
+      updateForm("enrollment", "userId", students[0].id);
     }
 
-    if (!forms.enrollment.courseId && data.courses[0]?.id) {
-      updateForm("enrollment", "courseId", data.courses[0].id);
+    if (!forms.enrollment.courseId && courses[0]?.id) {
+      updateForm("enrollment", "courseId", courses[0].id);
     }
 
     if (!forms.token.enrollmentId && activeEnrollments[0]?.id) {
@@ -209,8 +219,8 @@ export default function SecureCourseAdminPage() {
     }
   }, [
     activeEnrollments,
-    data.courses,
-    data.users,
+    courses,
+    students,
     forms.enrollment.courseId,
     forms.enrollment.userId,
     forms.lesson.courseId,
@@ -229,33 +239,6 @@ export default function SecureCourseAdminPage() {
     }));
   }
 
-  async function handleCreateDemoData() {
-    if (!window.confirm("Создать демонстрационные курсы и студентов?")) return;
-    setBusyAction("demo-data");
-    setError("");
-    setNotice("");
-    try {
-      const student1 = await createUser({ fullName: "Аружан Сарсен", email: "aruzhan@example.com", role: "STUDENT", status: "ACTIVE" });
-      const student2 = await createUser({ fullName: "Алишер Койшыбаев", email: "alisher@example.com", role: "STUDENT", status: "ACTIVE" });
-      
-      const course1 = await createCourse({ title: "IELTS Intensive 7.5+", slug: "ielts-intensive", shortDescription: "Полный курс подготовки к IELTS Academic.", description: "Полный курс", status: "PUBLISHED" });
-      const course2 = await createCourse({ title: "Ivy League Admissions", slug: "ivy-league", shortDescription: "Стратегия написания Personal Statement.", description: "Гайд", status: "PUBLISHED" });
-      
-      const lesson1 = await createLesson(course1.id, { title: "Урок 1. Структура IELTS Writing Task 2", slug: "ielts-writing-1", status: "PUBLISHED", content: "Пишем эссе на 7.5 баллов." });
-      await createLessonMaterial(lesson1.id, { title: "Vocab Checklist", type: "TEXT", content: "Advanced vocabulary phrases." });
-      
-      await createEnrollment({ userId: student1.id, courseId: course1.id, note: "Демо" });
-      await createEnrollment({ userId: student2.id, courseId: course2.id, note: "Демо" });
-      
-      setNotice("Успех! Демонстрационные данные загружены.");
-      await loadAdminData({ showSpinner: false });
-    } catch (e) {
-      setError("Ошибка демо: " + e.message);
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   async function handleCreateUser(event) {
     event.preventDefault();
     setBusyAction("create-user");
@@ -263,7 +246,7 @@ export default function SecureCourseAdminPage() {
     setNotice("");
 
     try {
-      await createUser({
+      const created = await createUser({
         email: forms.createUser.email,
         fullName: forms.createUser.fullName,
         role: "STUDENT",
@@ -275,12 +258,16 @@ export default function SecureCourseAdminPage() {
         createUser: {
           fullName: "",
           email: ""
+        },
+        enrollment: {
+          ...current.enrollment,
+          userId: created.id
         }
       }));
-      setNotice("Student created. Next step: enroll the student into a course.");
+      setNotice("Ученик создан. Следующий шаг - зачислить его на курс.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to create student.");
+      setError(requestError.message || "Не удалось создать ученика.");
     } finally {
       setBusyAction("");
     }
@@ -294,7 +281,7 @@ export default function SecureCourseAdminPage() {
 
     try {
       const slug = forms.createCourse.slug || slugify(forms.createCourse.title);
-      await createCourse({
+      const course = await createCourse({
         title: forms.createCourse.title,
         slug,
         shortDescription: forms.createCourse.shortDescription,
@@ -308,16 +295,20 @@ export default function SecureCourseAdminPage() {
           title: "",
           slug: "",
           shortDescription: ""
+        },
+        lesson: {
+          ...current.lesson,
+          courseId: course.id
+        },
+        enrollment: {
+          ...current.enrollment,
+          courseId: course.id
         }
       }));
-      setNotice("Course created. Add the first lesson and upload the video next.");
-      const snapshot = await loadAdminData({ showSpinner: false });
-
-      if (snapshot?.courses?.[0]?.id && !forms.lesson.courseId) {
-        updateForm("lesson", "courseId", snapshot.courses[0].id);
-      }
+      setNotice("Курс создан. Теперь добавьте первый урок.");
+      await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to create course.");
+      setError(requestError.message || "Не удалось создать курс.");
     } finally {
       setBusyAction("");
     }
@@ -340,7 +331,7 @@ export default function SecureCourseAdminPage() {
 
       if (forms.lesson.notes.trim()) {
         await createLessonMaterial(lesson.id, {
-          title: `${forms.lesson.title} notes`,
+          title: `${forms.lesson.title} — конспект`,
           type: "TEXT",
           content: forms.lesson.notes
         });
@@ -360,10 +351,10 @@ export default function SecureCourseAdminPage() {
           lessonId: lesson.id
         }
       }));
-      setNotice("Lesson created. You can upload the lesson video now.");
+      setNotice("Урок создан. Теперь можно загрузить видео.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to create lesson.");
+      setError(requestError.message || "Не удалось создать урок.");
     } finally {
       setBusyAction("");
     }
@@ -376,16 +367,22 @@ export default function SecureCourseAdminPage() {
     setNotice("");
 
     try {
-      await createEnrollment({
+      const enrollment = await createEnrollment({
         userId: forms.enrollment.userId,
         courseId: forms.enrollment.courseId,
-        note: "Assigned by manager from admin panel"
+        note: "Назначено менеджером через админку"
       });
 
-      setNotice("Enrollment created. You can issue a one-time token next.");
+      setForms((current) => ({
+        ...current,
+        token: {
+          enrollmentId: enrollment.id
+        }
+      }));
+      setNotice("Зачисление создано. Теперь можно выдать токен.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to create enrollment.");
+      setError(requestError.message || "Не удалось зачислить ученика.");
     } finally {
       setBusyAction("");
     }
@@ -401,28 +398,30 @@ export default function SecureCourseAdminPage() {
       const enrollment = activeEnrollments.find((item) => item.id === forms.token.enrollmentId);
 
       if (!enrollment) {
-        throw new Error("Choose an active enrollment first.");
+        throw new Error("Сначала выберите активное зачисление.");
       }
 
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
         activationExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        note: "Issued from SecureCourse admin panel"
+        note: "Выдан из админки SecureCourse"
       });
 
       setLastIssuedToken({
         id: issued.id,
         token: issued.token,
-        userEmail: enrollment.user.email,
+        studentName: enrollment.user.fullName,
+        studentEmail: enrollment.user.email,
         courseTitle: enrollment.course.title,
+        status: issued.status,
         expiresAt: issued.activationExpiresAt
       });
       setCopiedToken("");
-      setNotice("Token issued. Copy it now and send it to the student.");
+      setNotice("Токен выпущен. Скопируйте его и отправьте ученику.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to issue token.");
+      setError(requestError.message || "Не удалось выпустить токен.");
     } finally {
       setBusyAction("");
     }
@@ -432,9 +431,9 @@ export default function SecureCourseAdminPage() {
     try {
       await navigator.clipboard.writeText(rawToken);
       setCopiedToken(rawToken);
-      setNotice("Token copied. Send it to the student from this screen.");
+      setNotice("Токен скопирован. Теперь его можно отправить ученику.");
     } catch {
-      setError("Copy failed. Please copy the token manually.");
+      setError("Не удалось скопировать токен. Скопируйте его вручную.");
     }
   }
 
@@ -445,10 +444,10 @@ export default function SecureCourseAdminPage() {
 
     try {
       await revokeToken(tokenId, "revoked_by_manager");
-      setNotice("Token revoked.");
+      setNotice("Токен отозван.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to revoke token.");
+      setError(requestError.message || "Не удалось отозвать токен.");
     } finally {
       setBusyAction("");
     }
@@ -461,10 +460,10 @@ export default function SecureCourseAdminPage() {
 
     try {
       await revokeSession(sessionId, "revoked_by_manager");
-      setNotice("Student session revoked.");
+      setNotice("Сессия ученика завершена.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
-      setError(requestError.message || "Failed to revoke session.");
+      setError(requestError.message || "Не удалось завершить сессию.");
     } finally {
       setBusyAction("");
     }
@@ -478,11 +477,11 @@ export default function SecureCourseAdminPage() {
 
     try {
       if (!forms.upload.lessonId) {
-        throw new Error("Choose a lesson first.");
+        throw new Error("Сначала выберите урок.");
       }
 
       if (!selectedUploadFile) {
-        throw new Error("Choose a video file to upload.");
+        throw new Error("Выберите видеофайл для загрузки.");
       }
 
       const intent = await createUploadIntent({
@@ -496,7 +495,7 @@ export default function SecureCourseAdminPage() {
       setUploadState({
         assetId: intent.assetId,
         status: intent.status,
-        lessonTitle: selectedUploadLesson?.title || "Lesson",
+        lessonTitle: selectedUploadLesson?.title || "Урок",
         fileName: selectedUploadFile.name
       });
 
@@ -512,17 +511,17 @@ export default function SecureCourseAdminPage() {
       const uploadPayload = await uploadResponse.json().catch(() => null);
 
       if (!uploadResponse.ok) {
-        throw new Error(uploadPayload?.message || "Upload failed.");
+        throw new Error(uploadPayload?.message || "Загрузка завершилась с ошибкой.");
       }
 
       setUploadState({
         assetId: intent.assetId,
         status: uploadPayload?.asset?.status || "processing",
-        lessonTitle: selectedUploadLesson?.title || "Lesson",
+        lessonTitle: selectedUploadLesson?.title || "Урок",
         fileName: selectedUploadFile.name
       });
 
-      setNotice("Upload received. Processing video...");
+      setNotice("Файл получен. Идет обработка видео...");
 
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await wait(700);
@@ -533,7 +532,7 @@ export default function SecureCourseAdminPage() {
           setUploadState({
             assetId: currentAsset.id,
             status: currentAsset.status,
-            lessonTitle: currentAsset.lessonTitle || selectedUploadLesson?.title || "Lesson",
+            lessonTitle: currentAsset.lessonTitle || selectedUploadLesson?.title || "Урок",
             fileName: currentAsset.fileName || selectedUploadFile.name
           });
         }
@@ -550,9 +549,9 @@ export default function SecureCourseAdminPage() {
         fileInputRef.current.value = "";
       }
 
-      setNotice("Upload flow finished. The lesson now has a playable video asset.");
+      setNotice("Upload flow завершен. Видео привязано к уроку и готово к просмотру.");
     } catch (requestError) {
-      setError(requestError.message || "Video upload failed.");
+      setError(requestError.message || "Не удалось загрузить видео.");
     } finally {
       setBusyAction("");
     }
@@ -567,7 +566,7 @@ export default function SecureCourseAdminPage() {
       await logoutAdmin();
       window.location.assign("/securecourse/admin/login");
     } catch (requestError) {
-      setError(requestError.message || "Failed to log out.");
+      setError(requestError.message || "Не удалось выйти из админки.");
     } finally {
       setBusyAction("");
     }
@@ -580,14 +579,15 @@ export default function SecureCourseAdminPage() {
         <section className={styles.hero}>
           <div className={styles.heroGrid}>
             <div className={styles.heroCopy}>
-              <p className={styles.surfaceEyebrow}>Панель управления</p>
-              <h1 className={styles.heroTitle}>Единая платформа для курсов английского и подготовки за рубеж.</h1>
+              <p className={styles.surfaceEyebrow}>Админка продукта</p>
+              <h1 className={styles.heroTitle}>Управление курсами по IELTS, английскому и поступлению за рубеж.</h1>
               <p className={styles.heroLead}>
-                Создавайте курсы (IELTS, Scholarships), добавляйте уроки, генерируйте одноразовые токены для студентов и загружайте видеоматериалы.
+                Здесь менеджер создает ученика, курс и урок, зачисляет студента, выдает одноразовый токен и загружает
+                видео. Flow должен быть прямым: ученик - курс - урок - зачисление - токен - активация - просмотр.
               </p>
               <div className={styles.heroActions}>
                 <button className={styles.solidButton} onClick={() => loadAdminData()} type="button">
-                  Обновить дашборд
+                  Обновить данные
                 </button>
                 <button
                   className={styles.outlineButton}
@@ -595,7 +595,7 @@ export default function SecureCourseAdminPage() {
                   onClick={handleAdminLogout}
                   type="button"
                 >
-                  {busyAction === "logout-admin" ? "Выход..." : "Выйти"}
+                  {busyAction === "logout-admin" ? "Выходим..." : "Выйти"}
                 </button>
                 <Link className={styles.ghostButton} href="/securecourse">
                   Публичная страница
@@ -604,24 +604,24 @@ export default function SecureCourseAdminPage() {
             </div>
 
             <aside className={styles.heroPanel}>
-              <p className={styles.panelKicker}>Ваш профиль</p>
+              <p className={styles.panelKicker}>Сейчас в работе</p>
               <div className={styles.panelList}>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Менеджер платформы"}</strong>
-                    <p>{adminSession?.user?.email || "Авторизованная сессия администратора"}</p>
+                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Команда SecureCourse"}</strong>
+                    <p>{adminSession?.user?.email || "Серверная сессия администратора активна."}</p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>Рекомендуемый порядок</strong>
-                    <p>Студент → курс → урок → зачисление (enroll) → выдача токена → загрузка видео.</p>
+                    <strong>Базовые программы уже загружены</strong>
+                    <p>IELTS Writing, Speaking, scholarships, personal statement, documents и admission timeline.</p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>Как войти ученику</strong>
-                    <p>Отправьте ученику токен. Он активирует его на главной странице и попадает в кабинет.</p>
+                    <strong>Как дать доступ ученику</strong>
+                    <p>Зачислите на курс, выпустите токен, скопируйте код и отправьте его ученику на публичную страницу.</p>
                   </div>
                 </article>
               </div>
@@ -631,572 +631,624 @@ export default function SecureCourseAdminPage() {
 
         <section className={styles.metricStrip}>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Студенты</span>
+            <span className={styles.metricLabel}>Ученики</span>
             <strong className={styles.metricValue}>{data.metrics.totalUsers}</strong>
             <span className={styles.statusMeta}>{data.metrics.activeUsers} активных</span>
           </article>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Токены за сегодня</span>
+            <span className={styles.metricLabel}>Токены сегодня</span>
             <strong className={styles.metricValue}>{data.metrics.issuedTokensToday}</strong>
-            <span className={styles.statusMeta}>одноразовых доступов сгенерировано</span>
+            <span className={styles.statusMeta}>Выдано за текущий день</span>
           </article>
           <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Активные сессии</span>
             <strong className={styles.metricValue}>{data.metrics.activeSessions}</strong>
-            <span className={styles.statusMeta}>студентов онлайн в кабинете</span>
+            <span className={styles.statusMeta}>Одновременно у ученика только 1 сессия</span>
           </article>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Готовых видео</span>
+            <span className={styles.metricLabel}>Готовые видео</span>
             <strong className={styles.metricValue}>{data.metrics.readyVideoAssets}</strong>
-            <span className={styles.statusMeta}>обработанных материалов</span>
+            <span className={styles.statusMeta}>Video assets в статусе ready</span>
           </article>
         </section>
 
+        {loading ? <p className={styles.helperText}>Обновляем данные админки...</p> : null}
         {error ? <p className={styles.feedbackError}>{error}</p> : null}
         {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
         <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
-          <article className={styles.surface}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
                 <p className={styles.surfaceEyebrow}>Шаг 1</p>
-                <h2 className={styles.surfaceTitle}>Добавить ученика</h2>
+                <h2 className={styles.surfaceTitle}>Создать ученика</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem" }}>
-              <form className={styles.formStack} onSubmit={handleCreateUser}>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Имя и Фамилия студента</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
-                    placeholder="Аружан Сарсен"
-                    required
-                    value={forms.createUser.fullName}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Почта (Email)</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("createUser", "email", event.target.value)}
-                    placeholder="student@example.com"
-                    required
-                    type="email"
-                    value={forms.createUser.email}
-                  />
-                </label>
-                <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
-                  {busyAction === "create-user" ? "Создаем..." : "Создать ученика"}
-                </button>
-              </form>
-            </div>
-          </article>
 
-          <article className={styles.surface}>
+            <form className={styles.formStack} onSubmit={handleCreateUser} style={{ padding: "2rem" }}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Имя и фамилия</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
+                  placeholder="Например, Айгерим Нурбекова"
+                  required
+                  type="text"
+                  value={forms.createUser.fullName}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Email ученика</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("createUser", "email", event.target.value)}
+                  placeholder="student@example.com"
+                  required
+                  type="email"
+                  value={forms.createUser.email}
+                />
+              </label>
+
+              <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
+                {busyAction === "create-user" ? "Создаем..." : "Создать ученика"}
+              </button>
+            </form>
+          </section>
+
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
                 <p className={styles.surfaceEyebrow}>Шаг 2</p>
                 <h2 className={styles.surfaceTitle}>Создать курс</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem" }}>
-              <form className={styles.formStack} onSubmit={handleCreateCourse}>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Название курса</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("createCourse", "title", event.target.value)}
-                    placeholder="IELTS Writing Sprint"
-                    required
-                    value={forms.createCourse.title}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Системное имя (Slug)</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
-                    placeholder="ielts-writing-sprint"
-                    value={forms.createCourse.slug}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Короткое описание</span>
-                  <textarea
-                    className={styles.fieldTextarea}
-                    onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
-                    placeholder="Краткое описание курса для кабинета ученика."
-                    required
-                    value={forms.createCourse.shortDescription}
-                  />
-                </label>
-                <button className={styles.solidButton} disabled={busyAction === "create-course"} type="submit">
-                  {busyAction === "create-course" ? "Создаем..." : "Создать курс"}
-                </button>
-              </form>
-            </div>
-          </article>
+
+            <form className={styles.formStack} onSubmit={handleCreateCourse} style={{ padding: "2rem" }}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Название курса</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("createCourse", "title", event.target.value)}
+                  placeholder="IELTS Writing Bootcamp"
+                  required
+                  type="text"
+                  value={forms.createCourse.title}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Slug</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("createCourse", "slug", slugify(event.target.value))}
+                  placeholder="ielts-writing-bootcamp"
+                  type="text"
+                  value={forms.createCourse.slug}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Короткое описание</span>
+                <textarea
+                  className={styles.fieldTextarea}
+                  onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
+                  placeholder="Что ученик получит в этом курсе"
+                  rows={3}
+                  value={forms.createCourse.shortDescription}
+                />
+              </label>
+
+              <button className={styles.solidButton} disabled={busyAction === "create-course"} type="submit">
+                {busyAction === "create-course" ? "Создаем..." : "Создать курс"}
+              </button>
+            </form>
+          </section>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem" }}>
-          <article className={styles.surface}>
+        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
                 <p className={styles.surfaceEyebrow}>Шаг 3</p>
-                <h2 className={styles.surfaceTitle}>Опционально: Создать урок и контент</h2>
+                <h2 className={styles.surfaceTitle}>Создать урок и материалы</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem" }}>
-              <form className={styles.formStack} onSubmit={handleCreateLesson}>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Выбрать курс</span>
-                  <select
-                    className={styles.fieldSelect}
-                    onChange={(event) => updateForm("lesson", "courseId", event.target.value)}
-                    required
-                    value={forms.lesson.courseId}
-                  >
-                    <option value="">Выберите курс из списка...</option>
-                    {data.courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Название урока</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("lesson", "title", event.target.value)}
-                    placeholder="Урок 1. Personal statement strategy"
-                    required
-                    value={forms.lesson.title}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Slug урока</span>
-                  <input
-                    className={styles.fieldInput}
-                    onChange={(event) => updateForm("lesson", "slug", event.target.value)}
-                    placeholder="lesson-1-personal-statement"
-                    value={forms.lesson.slug}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Описание урока</span>
-                  <textarea
-                    className={styles.fieldTextarea}
-                    onChange={(event) => updateForm("lesson", "content", event.target.value)}
-                    placeholder="Краткое саммари для карточки урока."
-                    value={forms.lesson.content}
-                  />
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Доп. материалы (текст/ссылки/cheklist)</span>
-                  <textarea
-                    className={styles.fieldTextarea}
-                    onChange={(event) => updateForm("lesson", "notes", event.target.value)}
-                    placeholder="Скиньте сюда словарь, ссылки на ВУЗы или чек-листы."
-                    value={forms.lesson.notes}
-                  />
-                </label>
-                <button className={styles.solidButton} disabled={busyAction === "create-lesson"} type="submit">
-                  {busyAction === "create-lesson" ? "Сохраняем..." : "Создать урок"}
-                </button>
-              </form>
-            </div>
-          </article>
 
-          <article className={styles.surface}>
-            <div className={styles.surfaceHeader}>
-              <div>
-                <p className={styles.surfaceEyebrow}>Шаг 4</p>
-                <h2 className={styles.surfaceTitle}>Зачисление и генерация токена</h2>
-              </div>
-            </div>
-            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
-              <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Ученик</span>
-                  <select
-                    className={styles.fieldSelect}
-                    onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
-                    required
-                    value={forms.enrollment.userId}
-                  >
-                    <option value="">Выберите ученика...</option>
-                    {data.users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.fullName} ({user.email})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Доступ к курсу</span>
-                  <select
-                    className={styles.fieldSelect}
-                    onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
-                    required
-                    value={forms.enrollment.courseId}
-                  >
-                    <option value="">Выберите курс...</option>
-                    {data.courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className={styles.outlineButton} disabled={busyAction === "create-enrollment"} type="submit">
-                  {busyAction === "create-enrollment" ? "Зачисляем..." : "Зачислить ученика"}
-                </button>
-              </form>
-
-              <form className={styles.formStack} onSubmit={handleIssueToken}>
-                <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Выбрать активное зачисление</span>
-                  <select
-                    className={styles.fieldSelect}
-                    onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
-                    required
-                    value={forms.token.enrollmentId}
-                  >
-                    <option value="">Выберите зачисление...</option>
-                    {activeEnrollments.map((enrollment) => (
-                      <option key={enrollment.id} value={enrollment.id}>
-                        {enrollment.user.fullName} (Курс: {enrollment.course.title})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className={styles.solidButton} disabled={busyAction === "issue-token"} type="submit">
-                  {busyAction === "issue-token" ? "Генерация..." : "Сгенерировать супер-токен"}
-                </button>
-              </form>
-
-              <div className={styles.tokenReveal}>
-              {lastIssuedToken ? (
-                <>
-                  <p className={styles.surfaceEyebrow}>ВАШ НОВЫЙ ТОКЕН ГОТОВ К ОТПРАВКЕ</p>
-                  <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
-                  <p className={styles.tokenRevealMeta}>
-                    Студент: {lastIssuedToken.userEmail} · Курс: {lastIssuedToken.courseTitle} · Сгорит{" "}
-                    {formatDateTime(lastIssuedToken.expiresAt)}
-                  </p>
-                  <div className={styles.heroActions}>
-                    <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
-                      {copiedToken === lastIssuedToken.token ? "Скопировано!" : "Копировать код"}
-                    </button>
-                    <Link className={styles.outlineButton} href="/securecourse#activation">
-                      Публичная страница входа
-                    </Link>
-                  </div>
-                </>
-              ) : (
-                <p className={styles.helperText}>
-                  Выберите студента, нажмите "Сгенерировать супер-токен" и он появится тут крупным шрифтом с кнопкой копирования, чтобы вы скинули его ученику.
-                </p>
-              )}
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section className={styles.surface} style={{ marginTop: "1.25rem" }}>
-          <div className={styles.surfaceHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Шаг 5</p>
-              <h2 className={styles.surfaceTitle}>Загрузить видео для урока</h2>
-            </div>
-          </div>
-          <div style={{ padding: "2rem" }} className={styles.gridTwo}>
-            <form className={styles.formStack} onSubmit={handleUploadVideo}>
+            <form className={styles.formStack} onSubmit={handleCreateLesson} style={{ padding: "2rem" }}>
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Урок</span>
+                <span className={styles.fieldLabel}>Курс</span>
                 <select
                   className={styles.fieldSelect}
-                  onChange={(event) => updateForm("upload", "lessonId", event.target.value)}
-                  required
-                  value={forms.upload.lessonId}
+                  onChange={(event) => updateForm("lesson", "courseId", event.target.value)}
+                  value={forms.lesson.courseId}
                 >
-                  <option value="">Выберите урок...</option>
-                  {lessonOptions.map((lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.courseTitle} / {lesson.title}
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {!courses.length ? (
+                <p className={styles.helperText}>Пока нет курсов. Сначала создайте курс или используйте стартовые данные.</p>
+              ) : null}
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Название урока</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("lesson", "title", event.target.value)}
+                  placeholder="Например, Structure of IELTS Task 2"
+                  required
+                  type="text"
+                  value={forms.lesson.title}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Slug урока</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("lesson", "slug", slugify(event.target.value))}
+                  placeholder="task-2-essay-structure"
+                  type="text"
+                  value={forms.lesson.slug}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Описание урока</span>
+                <textarea
+                  className={styles.fieldTextarea}
+                  onChange={(event) => updateForm("lesson", "content", event.target.value)}
+                  placeholder="Кратко опишите, что внутри урока"
+                  rows={4}
+                  value={forms.lesson.content}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Конспект / заметки</span>
+                <textarea
+                  className={styles.fieldTextarea}
+                  onChange={(event) => updateForm("lesson", "notes", event.target.value)}
+                  placeholder="Сюда можно сразу добавить текстовый материал к уроку"
+                  rows={5}
+                  value={forms.lesson.notes}
+                />
+              </label>
+
+              <button
+                className={styles.solidButton}
+                disabled={busyAction === "create-lesson" || !forms.lesson.courseId}
+                type="submit"
+              >
+                {busyAction === "create-lesson" ? "Создаем..." : "Создать урок"}
+              </button>
+            </form>
+          </section>
+
+          <section className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Шаг 4 и 5</p>
+                <h2 className={styles.surfaceTitle}>Зачислить и выдать токен</h2>
+              </div>
+            </div>
+
+            <form className={styles.formStack} onSubmit={handleCreateEnrollment} style={{ padding: "2rem 2rem 1rem" }}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Ученик</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
+                  value={forms.enrollment.userId}
+                >
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.fullName} — {student.email}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Куда грузим (Провайдер)</span>
+                <span className={styles.fieldLabel}>Курс</span>
                 <select
                   className={styles.fieldSelect}
-                  onChange={(event) => updateForm("upload", "provider", event.target.value)}
-                  value={forms.upload.provider}
+                  onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
+                  value={forms.enrollment.courseId}
                 >
-                  <option value="RAILWAY_LOCAL">Локально (Railway)</option>
-                  <option value="MUX">Mux</option>
-                  <option value="CLOUDFLARE_STREAM">Cloudflare Stream</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
                 </select>
               </label>
 
+              {!students.length || !courses.length ? (
+                <p className={styles.helperText}>Для зачисления нужен хотя бы один ученик и один курс.</p>
+              ) : null}
+
+              <button
+                className={styles.solidButton}
+                disabled={busyAction === "create-enrollment" || !forms.enrollment.userId || !forms.enrollment.courseId}
+                type="submit"
+              >
+                {busyAction === "create-enrollment" ? "Зачисляем..." : "Зачислить на курс"}
+              </button>
+            </form>
+
+            <form className={styles.formStack} onSubmit={handleIssueToken} style={{ padding: "0 2rem 2rem" }}>
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Видео файл (.mp4)</span>
+                <span className={styles.fieldLabel}>Активное зачисление</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
+                  value={forms.token.enrollmentId}
+                >
+                  {activeEnrollments.map((enrollment) => (
+                    <option key={enrollment.id} value={enrollment.id}>
+                      {enrollment.user.fullName} → {enrollment.course.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {!activeEnrollments.length ? (
+                <p className={styles.helperText}>Пока нет активных зачислений. Сначала назначьте ученика на курс.</p>
+              ) : null}
+
+              <button
+                className={styles.solidButton}
+                disabled={busyAction === "issue-token" || !forms.token.enrollmentId}
+                type="submit"
+              >
+                {busyAction === "issue-token" ? "Выпускаем..." : "Сгенерировать токен"}
+              </button>
+            </form>
+          </section>
+        </section>
+
+        <section className={styles.surface} style={{ marginTop: "2rem" }}>
+          <div className={styles.surfaceHeader}>
+            <div>
+              <p className={styles.surfaceEyebrow}>Результат токена</p>
+              <h2 className={styles.surfaceTitle}>После генерации код сразу виден и готов к копированию.</h2>
+            </div>
+          </div>
+
+          <div style={{ padding: "2rem" }}>
+            {lastIssuedToken ? (
+              <div className={styles.tokenReveal}>
+                <p className={styles.surfaceEyebrow}>Одноразовый код доступа</p>
+                <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
+                <div className={styles.tokenRevealMeta}>
+                  <span>
+                    <strong>Студент:</strong> {lastIssuedToken.studentName}
+                  </span>
+                  <span>
+                    <strong>Email:</strong> {lastIssuedToken.studentEmail}
+                  </span>
+                  <span>
+                    <strong>Курс:</strong> {lastIssuedToken.courseTitle}
+                  </span>
+                  <span>
+                    <strong>Статус:</strong> {lastIssuedToken.status}
+                  </span>
+                  <span>
+                    <strong>Сгорит:</strong> {formatDateTime(lastIssuedToken.expiresAt)}
+                  </span>
+                </div>
+                <div className={styles.heroActions}>
+                  <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
+                    {copiedToken === lastIssuedToken.token ? "Скопировано" : "Скопировать токен"}
+                  </button>
+                  <Link className={styles.outlineButton} href="/securecourse">
+                    Открыть страницу активации
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <p className={styles.helperText}>
+                Здесь появится последний сгенерированный токен: код, студент, курс, статус и время истечения.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className={styles.surface} style={{ marginTop: "2rem" }}>
+          <div className={styles.surfaceHeader}>
+            <div>
+              <p className={styles.surfaceEyebrow}>Шаг 6</p>
+              <h2 className={styles.surfaceTitle}>Upload video для выбранного урока</h2>
+            </div>
+          </div>
+
+          <form className={styles.gridTwo} onSubmit={handleUploadVideo} style={{ padding: "2rem" }}>
+            <div className={styles.formStack}>
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Урок</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("upload", "lessonId", event.target.value)}
+                  value={forms.upload.lessonId}
+                >
+                  {lessonOptions.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      {lesson.courseTitle} → {lesson.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {!lessonOptions.length ? (
+                <p className={styles.helperText}>Пока нет уроков. Сначала создайте урок, и он появится здесь автоматически.</p>
+              ) : null}
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Видео файл</span>
                 <input
-                  ref={fileInputRef}
                   accept="video/*"
                   className={styles.fieldInput}
                   onChange={(event) => setSelectedUploadFile(event.target.files?.[0] || null)}
+                  ref={fileInputRef}
                   type="file"
                 />
               </label>
 
-              <button className={styles.solidButton} disabled={busyAction === "upload-video"} type="submit">
-                {busyAction === "upload-video" ? "Загружаем..." : "Загрузить видео"}
+              <button
+                className={styles.solidButton}
+                disabled={busyAction === "upload-video" || !forms.upload.lessonId || !selectedUploadFile}
+                type="submit"
+              >
+                {busyAction === "upload-video" ? "Загружаем..." : "Upload video"}
               </button>
-            </form>
+            </div>
 
             <div className={styles.callout}>
-              <p className={styles.surfaceEyebrow}>Статус загрузки</p>
+              <p className={styles.surfaceEyebrow}>Текущее состояние загрузки</p>
               <h3 className={styles.calloutTitle}>
-                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "Загрузка еще не начиналась"}
+                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "Загрузка еще не запускалась"}
               </h3>
               <p className={styles.helperText} style={{ color: "var(--text-soft)" }}>
-                Ожидаемый процесс: waiting_upload → uploading → processing → ready. Как только видео станет ready, студенты смогут его смотреть.
+                Ожидаемый процесс: waiting_upload, затем uploading, processing и ready. Как только статус дойдет до
+                ready, урок можно будет открыть в кабинете ученика.
               </p>
+
               {uploadState ? (
                 <div className={styles.compactList}>
                   <span>ID: {uploadState.assetId}</span>
                   <span>Файл: {uploadState.fileName}</span>
                   <span className={badgeClass(uploadState.status)}>{uploadState.status}</span>
                 </div>
-              ) : null}
+              ) : (
+                <p className={styles.helperText}>Выберите урок, выберите файл и запустите upload flow.</p>
+              )}
             </div>
-          </div>
+          </form>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem" }}>
-          <article className={styles.surface}>
+        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>База данных</p>
-                <h2 className={styles.surfaceTitle}>Каталог и ученики</h2>
+                <p className={styles.surfaceEyebrow}>Students</p>
+                <h2 className={styles.surfaceTitle}>Ученики и их зачисления</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
-              <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Студенты</p>
-                {loading && !data.users.length ? (
-                  <p className={styles.helperText}>Загружаем студентов...</p>
-                ) : data.users.length ? (
-                  <div className={styles.compactList}>
-                    {data.users.map((user) => (
-                      <div className={styles.materialCard} key={user.id}>
-                        <strong>{user.fullName}</strong>
-                        <p className={styles.helperText}>{user.email}</p>
-                        <span className={badgeClass(user.status)}>{user.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "flex-start" }}>
-                    <p className={styles.helperText}>Пусто. Нет студентов.</p>
-                    <button className={styles.solidButton} onClick={handleCreateDemoData} disabled={busyAction === "demo-data"} type="button">
-                      {busyAction === "demo-data" ? "Создаем..." : "Заполнить демо-данными (Курсы и Ученики)"}
-                    </button>
-                  </div>
-                )}
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Ученик</span>
+                <span>Email</span>
+                <span>Курсы</span>
               </div>
 
-              <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Курсы</p>
-                {loading && !data.courses.length ? (
-                  <p className={styles.helperText}>Загружаем курсы...</p>
-                ) : data.courses.length ? (
-                  <div className={styles.compactList}>
-                    {data.courses.map((course) => (
-                      <div className={styles.materialCard} key={course.id}>
-                        <strong>{course.title}</strong>
-                        <p className={styles.helperText}>{course.shortDescription || "Нет описания."}</p>
-                        <div className={styles.compactList}>
-                          {(course.lessons || []).map((lesson) => (
-                            <span key={lesson.id}>
-                              {lesson.title} <span className={badgeClass(lesson.status)}>{lesson.status}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+              {students.length ? (
+                students.map((student) => (
+                  <div className={styles.miniTableRow} key={student.id}>
+                    <strong>{student.fullName}</strong>
+                    <small>{student.email}</small>
+                    <small>{(student.enrollments || []).length || 0}</small>
                   </div>
-                ) : (
-                  <p className={styles.helperText}>Пока нет добавленных курсов. Можете создать выше или нажать кнопку 'Заполнить демо-данными'.</p>
-                )}
-              </div>
+                ))
+              ) : (
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Пока нет учеников. Создайте первого ученика в форме выше.
+                </p>
+              )}
             </div>
-          </article>
+          </section>
 
-          <article className={styles.surface}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Сессии и Токены</p>
-                <h2 className={styles.surfaceTitle}>Контроль доступов</h2>
+                <p className={styles.surfaceEyebrow}>Courses</p>
+                <h2 className={styles.surfaceTitle}>Курсы и уроки</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
-              <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Токены (Приглашения)</p>
-                {loading && !data.tokens.length ? (
-                  <p className={styles.helperText}>Загружаем токены...</p>
-                ) : data.tokens.length ? (
-                  <div className={styles.miniTable}>
-                    <div className={styles.miniTableHeader}>
-                      <span>Студент</span>
-                      <span>Статус</span>
-                      <span>Истекает</span>
-                      <span>Действие</span>
-                    </div>
-                    {data.tokens.map((token) => (
-                      <div className={styles.miniTableRow} key={token.id}>
-                        <span>
-                          <strong>{token.user?.fullName || token.user?.email || "Студент"}</strong>
-                          <small>{token.enrollment?.course?.title || "Курс"}</small>
-                        </span>
-                        <span className={badgeClass(token.status)}>{token.status}</span>
-                        <span>{formatDateTime(token.activationExpiresAt)}</span>
-                        <span>
-                          {token.status === "ISSUED" ? (
-                            <button
-                              className={styles.inlineLinkButton}
-                              disabled={busyAction === `revoke-token-${token.id}`}
-                              onClick={() => handleRevokeToken(token.id)}
-                              type="button"
-                            >
-                              Отозвать
-                            </button>
-                          ) : (
-                            <span className={styles.helperText}>-</span>
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className={styles.helperText}>Ещё не было выдано токенов.</p>
-                )}
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Курс</span>
+                <span>Уроки</span>
+                <span>Статус</span>
               </div>
 
-              <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Активные сессии веб-плеера</p>
-                {loading && !data.sessions.length ? (
-                  <p className={styles.helperText}>Загружаем сессии...</p>
-                ) : data.sessions.length ? (
-                  <div className={styles.miniTable}>
-                    <div className={styles.miniTableHeader}>
-                      <span>Студент</span>
-                      <span>Статус</span>
-                      <span>Последний онлайн</span>
-                      <span>Действие</span>
-                    </div>
-                    {data.sessions.map((session) => (
-                      <div className={styles.miniTableRow} key={session.id}>
-                        <span>
-                          <strong>{session.user?.fullName || session.user?.email || "Студент"}</strong>
-                          <small>{session.deviceLabel || "С браузера"}</small>
-                        </span>
-                        <span className={badgeClass(session.status)}>{session.status}</span>
-                        <span>{formatDateTime(session.lastSeenAt)}</span>
-                        <span>
-                          {session.status === "ACTIVE" ? (
-                            <button
-                              className={styles.inlineLinkButton}
-                              disabled={busyAction === `revoke-session-${session.id}`}
-                              onClick={() => handleRevokeSession(session.id)}
-                              type="button"
-                            >
-                              Отключить (Выкинуть)
-                            </button>
-                          ) : (
-                            <span className={styles.helperText}>-</span>
-                          )}
-                        </span>
-                      </div>
-                    ))}
+              {courses.length ? (
+                courses.map((course) => (
+                  <div className={styles.miniTableRow} key={course.id}>
+                    <strong>{course.title}</strong>
+                    <small>{(course.lessons || []).length || 0}</small>
+                    <small>
+                      <span className={badgeClass(course.status)}>{course.status}</span>
+                    </small>
                   </div>
-                ) : (
-                  <p className={styles.helperText}>Сейчас никто из студентов не смотрит курс.</p>
-                )}
-              </div>
+                ))
+              ) : (
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Пока нет курсов. Создайте курс или используйте стартовые программы.
+                </p>
+              )}
             </div>
-          </article>
+          </section>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "1.25rem", paddingBottom: "3rem" }}>
-          <article className={styles.surface}>
+        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Видео материалы</p>
-                <h2 className={styles.surfaceTitle}>Транскодинг</h2>
+                <p className={styles.surfaceEyebrow}>Tokens</p>
+                <h2 className={styles.surfaceTitle}>Одноразовые токены</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem" }}>
-              {loading && !data.uploads.length ? (
-                <p className={styles.helperText}>Загрузки...</p>
-              ) : data.uploads.length ? (
-                <div className={styles.miniTable}>
-                  <div className={styles.miniTableHeader}>
-                    <span>Урок</span>
-                    <span>Статус</span>
-                    <span>Провайдер</span>
-                    <span>Обновлен</span>
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Preview</span>
+                <span>Студент / курс</span>
+                <span>Статус</span>
+              </div>
+
+              {data.tokens.length ? (
+                data.tokens.map((token) => (
+                  <div className={styles.miniTableRow} key={token.id}>
+                    <strong>{token.preview}</strong>
+                    <small>
+                      {token.user?.fullName || "Ученик"} — {token.enrollment?.course?.title || "Курс"}
+                    </small>
+                    <small>
+                      <span className={badgeClass(token.status)}>{token.status}</span>{" "}
+                      <button
+                        className={styles.inlineLinkButton}
+                        disabled={busyAction === `revoke-token-${token.id}` || token.status !== "ISSUED"}
+                        onClick={() => handleRevokeToken(token.id)}
+                        type="button"
+                      >
+                        revoke
+                      </button>
+                    </small>
                   </div>
-                  {data.uploads.map((asset) => (
-                    <div className={styles.miniTableRow} key={asset.id}>
-                      <span>
-                        <strong>{asset.lessonTitle || "Видео урока"}</strong>
-                        <small>{asset.courseTitle || "Курс"}</small>
-                      </span>
+                ))
+              ) : (
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Токенов пока нет. После генерации они появятся здесь со статусами `ISSUED`, `USED`, `REVOKED` или
+                  `EXPIRED`.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Sessions</p>
+                <h2 className={styles.surfaceTitle}>Активные и завершенные сессии учеников</h2>
+              </div>
+            </div>
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Ученик</span>
+                <span>Сессия</span>
+                <span>Статус</span>
+              </div>
+
+              {data.sessions.length ? (
+                data.sessions.map((session) => (
+                  <div className={styles.miniTableRow} key={session.id}>
+                    <strong>{session.user?.fullName || session.userId}</strong>
+                    <small>{formatDateTime(session.startedAt || session.createdAt)}</small>
+                    <small>
+                      <span className={badgeClass(session.status)}>{session.status}</span>{" "}
+                      <button
+                        className={styles.inlineLinkButton}
+                        disabled={busyAction === `revoke-session-${session.id}` || session.status !== "ACTIVE"}
+                        onClick={() => handleRevokeSession(session.id)}
+                        type="button"
+                      >
+                        revoke
+                      </button>
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Пока нет ученических сессий. Они появятся после активации токена на публичной странице.
+                </p>
+              )}
+            </div>
+          </section>
+        </section>
+
+        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+          <section className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Video pipeline</p>
+                <h2 className={styles.surfaceTitle}>Статусы загрузок</h2>
+              </div>
+            </div>
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Урок</span>
+                <span>Файл</span>
+                <span>Статус</span>
+              </div>
+
+              {data.uploads.length ? (
+                data.uploads.map((asset) => (
+                  <div className={styles.miniTableRow} key={asset.id}>
+                    <strong>{asset.lessonTitle || "Урок"}</strong>
+                    <small>{asset.fileName || asset.provider}</small>
+                    <small>
                       <span className={badgeClass(asset.status)}>{asset.status}</span>
-                      <span>{asset.provider}</span>
-                      <span>{formatDateTime(asset.updatedAt)}</span>
-                    </div>
-                  ))}
-                </div>
+                    </small>
+                  </div>
+                ))
               ) : (
-                <p className={styles.helperText}>Нет загруженных видео.</p>
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Пока нет video assets. Они появятся после первого upload flow.
+                </p>
               )}
             </div>
-          </article>
+          </section>
 
-          <article className={styles.surface}>
+          <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Аудит лог</p>
-                <h2 className={styles.surfaceTitle}>Последние действия</h2>
+                <p className={styles.surfaceEyebrow}>Recent activity</p>
+                <h2 className={styles.surfaceTitle}>Последние действия системы</h2>
               </div>
             </div>
-            <div style={{ padding: "2rem" }}>
-              {loading && !data.logs.length ? (
-                <p className={styles.helperText}>Загружаем логи...</p>
-              ) : data.logs.length ? (
-                <div className={styles.compactList}>
-                  {data.logs.slice(0, 10).map((log) => (
-                    <div className={styles.materialCard} key={log.id}>
-                      <strong>{log.eventType}</strong>
-                      <p className={styles.helperText}>
-                        {log.actorType} · {log.entityType || "системно"} · {formatDateTime(log.createdAt)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+
+            <div className={styles.miniTable}>
+              <div className={styles.miniTableHeader}>
+                <span>Событие</span>
+                <span>Тип</span>
+                <span>Время</span>
+              </div>
+
+              {data.logs.length ? (
+                data.logs.slice(0, 10).map((log) => (
+                  <div className={styles.miniTableRow} key={log.id}>
+                    <strong>{log.eventType}</strong>
+                    <small>{log.entityType || "system"}</small>
+                    <small>{formatDateTime(log.createdAt)}</small>
+                  </div>
+                ))
               ) : (
-                <p className={styles.helperText}>События безопасности отсутствуют.</p>
+                <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
+                  Логи появятся после действий в админке и после активации токенов учениками.
+                </p>
               )}
             </div>
-          </article>
+          </section>
         </section>
       </div>
     </main>
