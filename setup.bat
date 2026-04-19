@@ -1,6 +1,6 @@
 @echo off
 echo Устанавливаем необходимые зависимости (ThreeJS, Tailwind, TypeScript, Lucide)...
-npm install three next-themes lucide-react clsx tailwind-merge typescript @types/node @types/react @types/three tailwindcss postcss autoprefixer class-variance-authority @radix-ui/react-slot
+npm install three next-themes lucide-react clsx tailwind-merge typescript @types/node @types/react @types/three tailwindcss postcss autoprefixer class-variance-authority @radix-ui/react-slot @splinetool/runtime @splinetool/react-spline framer-motion
 echo.
 echo Инициализируем Tailwind CSS...
 npx tailwindcss init -p
