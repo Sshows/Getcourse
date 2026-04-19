@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { activateAccess, getSecureCourseSession, logoutAccess } from "@/lib/securecourse-api";
 import styles from "@/app/securecourse/securecourse.module.css";
 
 export default function SecureCourseActivationPanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -39,6 +40,14 @@ export default function SecureCourseActivationPanel() {
         });
       });
   }, []);
+
+  useEffect(() => {
+    const tokenFromUrl = searchParams.get("token") || "";
+
+    if (tokenFromUrl) {
+      setToken(tokenFromUrl);
+    }
+  }, [searchParams]);
 
   async function handleActivate(event) {
     event.preventDefault();

@@ -947,8 +947,11 @@ export default function SecureCourseAdminPage() {
                   <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
                     {copiedToken === lastIssuedToken.token ? "Скопировано" : "Скопировать токен"}
                   </button>
-                  <Link className={styles.outlineButton} href="/securecourse">
-                    Открыть страницу активации
+                  <Link
+                    className={styles.outlineButton}
+                    href={`/securecourse?token=${encodeURIComponent(lastIssuedToken.token)}#activation`}
+                  >
+                    Перейти к активации
                   </Link>
                 </div>
               </div>
