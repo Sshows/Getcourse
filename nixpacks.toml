@@ -5,4 +5,4 @@ nixPkgs = ["nodejs_20"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm run start:prod"
+cmd = "node scripts/start-railway.js"

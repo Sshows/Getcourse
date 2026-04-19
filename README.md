@@ -1,63 +1,36 @@
 # SecureCourse MVP
 
-SecureCourse is a three-interface learning platform MVP:
+SecureCourse now runs as a single Railway service.
 
-- public website in Next.js
-- admin panel in Next.js
-- protected backend API in NestJS
-
-The current production-safe MVP path is a self-contained Next.js app: the UI and the secure
-route handlers live in one deployment unit, and the MVP data layer is file-backed for easy
-single-service deploys. The legacy NestJS backend remains in [`backend`](./backend) for future
-expansion, but the app no longer requires a separate backend service to run the core flow.
+The public website, admin panel, token activation flow, and temporary student cabinet all run in
+one `Next.js` application. The current MVP data layer is file-backed, so the app does not require a
+separate database or API service just to boot and work.
 
 ## Routes
 
 - `/` or `/securecourse` - public SecureCourse website
+- `/securecourse/admin/login` - admin login
 - `/securecourse/admin` - admin panel
-- `/securecourse/mobile` - temporary student web cabinet
+- `/securecourse/student` - temporary student web cabinet
+- `/api/health` - Railway healthcheck
 
-## Local frontend setup
+## Local setup
 
 1. Copy `.env.example` to `.env.local`
-2. Set `SECURECOURSE_API_URL` to your running backend API
-3. Start the frontend:
+2. Set `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`
+3. Start the app:
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Optional legacy backend setup
+## Railway deploy
 
-Backend lives in [`backend`](./backend).
-
-```bash
-cd backend
-npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run start:dev
-```
-
-## Docker runtime
-
-The repository includes `docker-compose.yml` for:
-
-- PostgreSQL
-- Redis
-- pgAdmin
-- NestJS backend
-
-Read [`docs/securecourse-runtime.md`](./docs/securecourse-runtime.md) for runtime notes.
-
-## Deployment note
-
-For the simplest working deploy, run the repository as one Next.js service. Railway or Render can
-build the root app with:
+Deploy the repository root as one Railway service:
 
 - Build command: `npm run build`
-- Start command: `npm run start:prod`
+- Start command: `node scripts/start-railway.js`
 
 This single service includes:
 
@@ -65,5 +38,7 @@ This single service includes:
 - admin auth and admin panel APIs
 - token activation
 - temporary student web cabinet APIs
+- Railway healthcheck on `/api/health`
 
-No separate NestJS runtime is required for the working MVP path.
+The legacy [`backend`](./backend) folder remains in the repo for future work, but Railway no longer
+needs it for the working MVP deploy path.
