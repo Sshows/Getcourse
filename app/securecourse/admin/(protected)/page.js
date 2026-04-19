@@ -229,6 +229,33 @@ export default function SecureCourseAdminPage() {
     }));
   }
 
+  async function handleCreateDemoData() {
+    if (!window.confirm("Создать демонстрационные курсы и студентов?")) return;
+    setBusyAction("demo-data");
+    setError("");
+    setNotice("");
+    try {
+      const student1 = await createUser({ fullName: "Аружан Сарсен", email: "aruzhan@example.com", role: "STUDENT", status: "ACTIVE" });
+      const student2 = await createUser({ fullName: "Алишер Койшыбаев", email: "alisher@example.com", role: "STUDENT", status: "ACTIVE" });
+      
+      const course1 = await createCourse({ title: "IELTS Intensive 7.5+", slug: "ielts-intensive", shortDescription: "Полный курс подготовки к IELTS Academic.", description: "Полный курс", status: "PUBLISHED" });
+      const course2 = await createCourse({ title: "Ivy League Admissions", slug: "ivy-league", shortDescription: "Стратегия написания Personal Statement.", description: "Гайд", status: "PUBLISHED" });
+      
+      const lesson1 = await createLesson(course1.id, { title: "Урок 1. Структура IELTS Writing Task 2", slug: "ielts-writing-1", status: "PUBLISHED", content: "Пишем эссе на 7.5 баллов." });
+      await createLessonMaterial(lesson1.id, { title: "Vocab Checklist", type: "TEXT", content: "Advanced vocabulary phrases." });
+      
+      await createEnrollment({ userId: student1.id, courseId: course1.id, note: "Демо" });
+      await createEnrollment({ userId: student2.id, courseId: course2.id, note: "Демо" });
+      
+      setNotice("Успех! Демонстрационные данные загружены.");
+      await loadAdminData({ showSpinner: false });
+    } catch (e) {
+      setError("Ошибка демо: " + e.message);
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function handleCreateUser(event) {
     event.preventDefault();
     setBusyAction("create-user");
@@ -553,15 +580,14 @@ export default function SecureCourseAdminPage() {
         <section className={styles.hero}>
           <div className={styles.heroGrid}>
             <div className={styles.heroCopy}>
-              <p className={styles.surfaceEyebrow}>Admin workspace</p>
-              <h1 className={styles.heroTitle}>Run the full English and study abroad delivery flow in one panel.</h1>
+              <p className={styles.surfaceEyebrow}>Панель управления</p>
+              <h1 className={styles.heroTitle}>Единая платформа для курсов английского и подготовки за рубеж.</h1>
               <p className={styles.heroLead}>
-                Create students, build courses and lessons, enroll learners, issue one-time tokens, upload videos, and
-                manage active sessions from one Railway deployment.
+                Создавайте курсы (IELTS, Scholarships), добавляйте уроки, генерируйте одноразовые токены для студентов и загружайте видеоматериалы.
               </p>
               <div className={styles.heroActions}>
                 <button className={styles.solidButton} onClick={() => loadAdminData()} type="button">
-                  Refresh dashboard
+                  Обновить дашборд
                 </button>
                 <button
                   className={styles.outlineButton}
@@ -569,33 +595,33 @@ export default function SecureCourseAdminPage() {
                   onClick={handleAdminLogout}
                   type="button"
                 >
-                  {busyAction === "logout-admin" ? "Signing out..." : "Logout"}
+                  {busyAction === "logout-admin" ? "Выход..." : "Выйти"}
                 </button>
                 <Link className={styles.ghostButton} href="/securecourse">
-                  Public page
+                  Публичная страница
                 </Link>
               </div>
             </div>
 
             <aside className={styles.heroPanel}>
-              <p className={styles.panelKicker}>Signed in as</p>
+              <p className={styles.panelKicker}>Ваш профиль</p>
               <div className={styles.panelList}>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Admin user"}</strong>
-                    <p>{adminSession?.user?.email || "Authenticated admin session"}</p>
+                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Менеджер платформы"}</strong>
+                    <p>{adminSession?.user?.email || "Авторизованная сессия администратора"}</p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>Recommended order</strong>
-                    <p>Create student → create course → create lesson → enroll → issue token → upload video.</p>
+                    <strong>Рекомендуемый порядок</strong>
+                    <p>Студент → курс → урок → зачисление (enroll) → выдача токена → загрузка видео.</p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>Activation path</strong>
-                    <p>Students activate the token on the public page and continue in the student cabinet.</p>
+                    <strong>Как войти ученику</strong>
+                    <p>Отправьте ученику токен. Он активирует его на главной странице и попадает в кабинет.</p>
                   </div>
                 </article>
               </div>
@@ -605,24 +631,24 @@ export default function SecureCourseAdminPage() {
 
         <section className={styles.metricStrip}>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Students</span>
+            <span className={styles.metricLabel}>Студенты</span>
             <strong className={styles.metricValue}>{data.metrics.totalUsers}</strong>
-            <span className={styles.statusMeta}>{data.metrics.activeUsers} active</span>
+            <span className={styles.statusMeta}>{data.metrics.activeUsers} активных</span>
           </article>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Tokens today</span>
+            <span className={styles.metricLabel}>Токены за сегодня</span>
             <strong className={styles.metricValue}>{data.metrics.issuedTokensToday}</strong>
-            <span className={styles.statusMeta}>one-time access links and codes</span>
+            <span className={styles.statusMeta}>одноразовых доступов сгенерировано</span>
           </article>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Active sessions</span>
+            <span className={styles.metricLabel}>Активные сессии</span>
             <strong className={styles.metricValue}>{data.metrics.activeSessions}</strong>
-            <span className={styles.statusMeta}>single active student session enforced</span>
+            <span className={styles.statusMeta}>студентов онлайн в кабинете</span>
           </article>
           <article className={styles.metricCard}>
-            <span className={styles.metricLabel}>Ready videos</span>
+            <span className={styles.metricLabel}>Готовых видео</span>
             <strong className={styles.metricValue}>{data.metrics.readyVideoAssets}</strong>
-            <span className={styles.statusMeta}>playable lesson assets</span>
+            <span className={styles.statusMeta}>обработанных материалов</span>
           </article>
         </section>
 
@@ -633,24 +659,24 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Step 1</p>
-                <h2 className={styles.surfaceTitle}>Create a student</h2>
+                <p className={styles.surfaceEyebrow}>Шаг 1</p>
+                <h2 className={styles.surfaceTitle}>Добавить ученика</h2>
               </div>
             </div>
             <div style={{ padding: "2rem" }}>
               <form className={styles.formStack} onSubmit={handleCreateUser}>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Student full name</span>
+                  <span className={styles.fieldLabel}>Имя и Фамилия студента</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("createUser", "fullName", event.target.value)}
-                    placeholder="Aruzhan Sarsen"
+                    placeholder="Аружан Сарсен"
                     required
                     value={forms.createUser.fullName}
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Email</span>
+                  <span className={styles.fieldLabel}>Почта (Email)</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("createUser", "email", event.target.value)}
@@ -661,7 +687,7 @@ export default function SecureCourseAdminPage() {
                   />
                 </label>
                 <button className={styles.solidButton} disabled={busyAction === "create-user"} type="submit">
-                  {busyAction === "create-user" ? "Creating..." : "Create student"}
+                  {busyAction === "create-user" ? "Создаем..." : "Создать ученика"}
                 </button>
               </form>
             </div>
@@ -670,14 +696,14 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Step 2</p>
-                <h2 className={styles.surfaceTitle}>Create a course</h2>
+                <p className={styles.surfaceEyebrow}>Шаг 2</p>
+                <h2 className={styles.surfaceTitle}>Создать курс</h2>
               </div>
             </div>
             <div style={{ padding: "2rem" }}>
               <form className={styles.formStack} onSubmit={handleCreateCourse}>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Course title</span>
+                  <span className={styles.fieldLabel}>Название курса</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("createCourse", "title", event.target.value)}
@@ -687,7 +713,7 @@ export default function SecureCourseAdminPage() {
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Slug</span>
+                  <span className={styles.fieldLabel}>Системное имя (Slug)</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("createCourse", "slug", event.target.value)}
@@ -696,17 +722,17 @@ export default function SecureCourseAdminPage() {
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Short description</span>
+                  <span className={styles.fieldLabel}>Короткое описание</span>
                   <textarea
                     className={styles.fieldTextarea}
                     onChange={(event) => updateForm("createCourse", "shortDescription", event.target.value)}
-                    placeholder="A short intro for the student dashboard."
+                    placeholder="Краткое описание курса для кабинета ученика."
                     required
                     value={forms.createCourse.shortDescription}
                   />
                 </label>
                 <button className={styles.solidButton} disabled={busyAction === "create-course"} type="submit">
-                  {busyAction === "create-course" ? "Creating..." : "Create course"}
+                  {busyAction === "create-course" ? "Создаем..." : "Создать курс"}
                 </button>
               </form>
             </div>
@@ -717,21 +743,21 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Step 3</p>
-                <h2 className={styles.surfaceTitle}>Create a lesson and notes</h2>
+                <p className={styles.surfaceEyebrow}>Шаг 3</p>
+                <h2 className={styles.surfaceTitle}>Опционально: Создать урок и контент</h2>
               </div>
             </div>
             <div style={{ padding: "2rem" }}>
               <form className={styles.formStack} onSubmit={handleCreateLesson}>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Course</span>
+                  <span className={styles.fieldLabel}>Выбрать курс</span>
                   <select
                     className={styles.fieldSelect}
                     onChange={(event) => updateForm("lesson", "courseId", event.target.value)}
                     required
                     value={forms.lesson.courseId}
                   >
-                    <option value="">Select course</option>
+                    <option value="">Выберите курс из списка...</option>
                     {data.courses.map((course) => (
                       <option key={course.id} value={course.id}>
                         {course.title}
@@ -740,44 +766,44 @@ export default function SecureCourseAdminPage() {
                   </select>
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Lesson title</span>
+                  <span className={styles.fieldLabel}>Название урока</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("lesson", "title", event.target.value)}
-                    placeholder="Lesson 1. Personal statement structure"
+                    placeholder="Урок 1. Personal statement strategy"
                     required
                     value={forms.lesson.title}
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Lesson slug</span>
+                  <span className={styles.fieldLabel}>Slug урока</span>
                   <input
                     className={styles.fieldInput}
                     onChange={(event) => updateForm("lesson", "slug", event.target.value)}
-                    placeholder="lesson-1-personal-statement-structure"
+                    placeholder="lesson-1-personal-statement"
                     value={forms.lesson.slug}
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Lesson summary</span>
+                  <span className={styles.fieldLabel}>Описание урока</span>
                   <textarea
                     className={styles.fieldTextarea}
                     onChange={(event) => updateForm("lesson", "content", event.target.value)}
-                    placeholder="Short lesson summary shown in the cabinet."
+                    placeholder="Краткое саммари для карточки урока."
                     value={forms.lesson.content}
                   />
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Lesson notes</span>
+                  <span className={styles.fieldLabel}>Доп. материалы (текст/ссылки/cheklist)</span>
                   <textarea
                     className={styles.fieldTextarea}
                     onChange={(event) => updateForm("lesson", "notes", event.target.value)}
-                    placeholder="Checklist, vocabulary, university links, or any supporting notes."
+                    placeholder="Скиньте сюда словарь, ссылки на ВУЗы или чек-листы."
                     value={forms.lesson.notes}
                   />
                 </label>
                 <button className={styles.solidButton} disabled={busyAction === "create-lesson"} type="submit">
-                  {busyAction === "create-lesson" ? "Saving..." : "Create lesson"}
+                  {busyAction === "create-lesson" ? "Сохраняем..." : "Создать урок"}
                 </button>
               </form>
             </div>
@@ -786,21 +812,21 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Step 4</p>
-                <h2 className={styles.surfaceTitle}>Enroll and issue token</h2>
+                <p className={styles.surfaceEyebrow}>Шаг 4</p>
+                <h2 className={styles.surfaceTitle}>Зачисление и генерация токена</h2>
               </div>
             </div>
             <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
               <form className={styles.formStack} onSubmit={handleCreateEnrollment}>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Student</span>
+                  <span className={styles.fieldLabel}>Ученик</span>
                   <select
                     className={styles.fieldSelect}
                     onChange={(event) => updateForm("enrollment", "userId", event.target.value)}
                     required
                     value={forms.enrollment.userId}
                   >
-                    <option value="">Select student</option>
+                    <option value="">Выберите ученика...</option>
                     {data.users.map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.fullName} ({user.email})
@@ -809,14 +835,14 @@ export default function SecureCourseAdminPage() {
                   </select>
                 </label>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Course</span>
+                  <span className={styles.fieldLabel}>Доступ к курсу</span>
                   <select
                     className={styles.fieldSelect}
                     onChange={(event) => updateForm("enrollment", "courseId", event.target.value)}
                     required
                     value={forms.enrollment.courseId}
                   >
-                    <option value="">Select course</option>
+                    <option value="">Выберите курс...</option>
                     {data.courses.map((course) => (
                       <option key={course.id} value={course.id}>
                         {course.title}
@@ -825,54 +851,56 @@ export default function SecureCourseAdminPage() {
                   </select>
                 </label>
                 <button className={styles.outlineButton} disabled={busyAction === "create-enrollment"} type="submit">
-                  {busyAction === "create-enrollment" ? "Assigning..." : "Enroll student"}
+                  {busyAction === "create-enrollment" ? "Зачисляем..." : "Зачислить ученика"}
                 </button>
               </form>
 
               <form className={styles.formStack} onSubmit={handleIssueToken}>
                 <label className={styles.fieldGroup}>
-                  <span className={styles.fieldLabel}>Active enrollment</span>
+                  <span className={styles.fieldLabel}>Выбрать активное зачисление</span>
                   <select
                     className={styles.fieldSelect}
                     onChange={(event) => updateForm("token", "enrollmentId", event.target.value)}
                     required
                     value={forms.token.enrollmentId}
                   >
-                    <option value="">Select active enrollment</option>
+                    <option value="">Выберите зачисление...</option>
                     {activeEnrollments.map((enrollment) => (
                       <option key={enrollment.id} value={enrollment.id}>
-                        {enrollment.user.fullName} / {enrollment.course.title}
+                        {enrollment.user.fullName} (Курс: {enrollment.course.title})
                       </option>
                     ))}
                   </select>
                 </label>
                 <button className={styles.solidButton} disabled={busyAction === "issue-token"} type="submit">
-                  {busyAction === "issue-token" ? "Generating..." : "Generate token"}
+                  {busyAction === "issue-token" ? "Генерация..." : "Сгенерировать супер-токен"}
                 </button>
               </form>
 
+              <div className={styles.tokenReveal}>
               {lastIssuedToken ? (
-                <div className={styles.tokenReveal}>
-                  <p className={styles.surfaceEyebrow}>Latest raw token</p>
+                <>
+                  <p className={styles.surfaceEyebrow}>ВАШ НОВЫЙ ТОКЕН ГОТОВ К ОТПРАВКЕ</p>
                   <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
                   <p className={styles.tokenRevealMeta}>
-                    {lastIssuedToken.userEmail} · {lastIssuedToken.courseTitle} · expires{" "}
+                    Студент: {lastIssuedToken.userEmail} · Курс: {lastIssuedToken.courseTitle} · Сгорит{" "}
                     {formatDateTime(lastIssuedToken.expiresAt)}
                   </p>
                   <div className={styles.heroActions}>
                     <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
-                      {copiedToken === lastIssuedToken.token ? "Copied" : "Copy token"}
+                      {copiedToken === lastIssuedToken.token ? "Скопировано!" : "Копировать код"}
                     </button>
                     <Link className={styles.outlineButton} href="/securecourse#activation">
-                      Open activation page
+                      Публичная страница входа
                     </Link>
                   </div>
-                </div>
+                </>
               ) : (
                 <p className={styles.helperText}>
-                  Generate a token and it will appear here immediately with a copy action.
+                  Выберите студента, нажмите "Сгенерировать супер-токен" и он появится тут крупным шрифтом с кнопкой копирования, чтобы вы скинули его ученику.
                 </p>
               )}
+              </div>
             </div>
           </article>
         </section>
@@ -880,21 +908,21 @@ export default function SecureCourseAdminPage() {
         <section className={styles.surface} style={{ marginTop: "1.25rem" }}>
           <div className={styles.surfaceHeader}>
             <div>
-              <p className={styles.surfaceEyebrow}>Step 5</p>
-              <h2 className={styles.surfaceTitle}>Upload lesson video</h2>
+              <p className={styles.surfaceEyebrow}>Шаг 5</p>
+              <h2 className={styles.surfaceTitle}>Загрузить видео для урока</h2>
             </div>
           </div>
           <div style={{ padding: "2rem" }} className={styles.gridTwo}>
             <form className={styles.formStack} onSubmit={handleUploadVideo}>
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Lesson</span>
+                <span className={styles.fieldLabel}>Урок</span>
                 <select
                   className={styles.fieldSelect}
                   onChange={(event) => updateForm("upload", "lessonId", event.target.value)}
                   required
                   value={forms.upload.lessonId}
                 >
-                  <option value="">Select lesson</option>
+                  <option value="">Выберите урок...</option>
                   {lessonOptions.map((lesson) => (
                     <option key={lesson.id} value={lesson.id}>
                       {lesson.courseTitle} / {lesson.title}
@@ -904,20 +932,20 @@ export default function SecureCourseAdminPage() {
               </label>
 
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Provider label</span>
+                <span className={styles.fieldLabel}>Куда грузим (Провайдер)</span>
                 <select
                   className={styles.fieldSelect}
                   onChange={(event) => updateForm("upload", "provider", event.target.value)}
                   value={forms.upload.provider}
                 >
-                  <option value="RAILWAY_LOCAL">Railway local upload</option>
-                  <option value="MUX">Mux style upload intent</option>
-                  <option value="CLOUDFLARE_STREAM">Cloudflare Stream style upload intent</option>
+                  <option value="RAILWAY_LOCAL">Локально (Railway)</option>
+                  <option value="MUX">Mux</option>
+                  <option value="CLOUDFLARE_STREAM">Cloudflare Stream</option>
                 </select>
               </label>
 
               <label className={styles.fieldGroup}>
-                <span className={styles.fieldLabel}>Video file</span>
+                <span className={styles.fieldLabel}>Видео файл (.mp4)</span>
                 <input
                   ref={fileInputRef}
                   accept="video/*"
@@ -928,23 +956,22 @@ export default function SecureCourseAdminPage() {
               </label>
 
               <button className={styles.solidButton} disabled={busyAction === "upload-video"} type="submit">
-                {busyAction === "upload-video" ? "Uploading..." : "Upload video"}
+                {busyAction === "upload-video" ? "Загружаем..." : "Загрузить видео"}
               </button>
             </form>
 
             <div className={styles.callout}>
-              <p className={styles.surfaceEyebrow}>Upload status</p>
+              <p className={styles.surfaceEyebrow}>Статус загрузки</p>
               <h3 className={styles.calloutTitle}>
-                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "No upload started yet"}
+                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "Загрузка еще не начиналась"}
               </h3>
               <p className={styles.helperText} style={{ color: "var(--text-soft)" }}>
-                Flow: waiting_upload → uploading → processing → ready. After the asset is ready, students can open the
-                lesson and receive playback access.
+                Ожидаемый процесс: waiting_upload → uploading → processing → ready. Как только видео станет ready, студенты смогут его смотреть.
               </p>
               {uploadState ? (
                 <div className={styles.compactList}>
-                  <span>Asset ID: {uploadState.assetId}</span>
-                  <span>File: {uploadState.fileName}</span>
+                  <span>ID: {uploadState.assetId}</span>
+                  <span>Файл: {uploadState.fileName}</span>
                   <span className={badgeClass(uploadState.status)}>{uploadState.status}</span>
                 </div>
               ) : null}
@@ -956,15 +983,15 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Students and courses</p>
-                <h2 className={styles.surfaceTitle}>Current catalog</h2>
+                <p className={styles.surfaceEyebrow}>База данных</p>
+                <h2 className={styles.surfaceTitle}>Каталог и ученики</h2>
               </div>
             </div>
             <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
               <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Students</p>
+                <p className={styles.surfaceEyebrow}>Студенты</p>
                 {loading && !data.users.length ? (
-                  <p className={styles.helperText}>Loading students...</p>
+                  <p className={styles.helperText}>Загружаем студентов...</p>
                 ) : data.users.length ? (
                   <div className={styles.compactList}>
                     {data.users.map((user) => (
@@ -976,20 +1003,25 @@ export default function SecureCourseAdminPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className={styles.helperText}>No students yet.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "flex-start" }}>
+                    <p className={styles.helperText}>Пусто. Нет студентов.</p>
+                    <button className={styles.solidButton} onClick={handleCreateDemoData} disabled={busyAction === "demo-data"} type="button">
+                      {busyAction === "demo-data" ? "Создаем..." : "Заполнить демо-данными (Курсы и Ученики)"}
+                    </button>
+                  </div>
                 )}
               </div>
 
               <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Courses</p>
+                <p className={styles.surfaceEyebrow}>Курсы</p>
                 {loading && !data.courses.length ? (
-                  <p className={styles.helperText}>Loading courses...</p>
+                  <p className={styles.helperText}>Загружаем курсы...</p>
                 ) : data.courses.length ? (
                   <div className={styles.compactList}>
                     {data.courses.map((course) => (
                       <div className={styles.materialCard} key={course.id}>
                         <strong>{course.title}</strong>
-                        <p className={styles.helperText}>{course.shortDescription || "Course description pending."}</p>
+                        <p className={styles.helperText}>{course.shortDescription || "Нет описания."}</p>
                         <div className={styles.compactList}>
                           {(course.lessons || []).map((lesson) => (
                             <span key={lesson.id}>
@@ -1001,7 +1033,7 @@ export default function SecureCourseAdminPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className={styles.helperText}>No courses yet.</p>
+                  <p className={styles.helperText}>Пока нет добавленных курсов. Можете создать выше или нажать кнопку 'Заполнить демо-данными'.</p>
                 )}
               </div>
             </div>
@@ -1010,28 +1042,28 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Tokens and sessions</p>
-                <h2 className={styles.surfaceTitle}>Live access control</h2>
+                <p className={styles.surfaceEyebrow}>Сессии и Токены</p>
+                <h2 className={styles.surfaceTitle}>Контроль доступов</h2>
               </div>
             </div>
             <div style={{ padding: "2rem", display: "grid", gap: "1.5rem" }}>
               <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Tokens</p>
+                <p className={styles.surfaceEyebrow}>Токены (Приглашения)</p>
                 {loading && !data.tokens.length ? (
-                  <p className={styles.helperText}>Loading tokens...</p>
+                  <p className={styles.helperText}>Загружаем токены...</p>
                 ) : data.tokens.length ? (
                   <div className={styles.miniTable}>
                     <div className={styles.miniTableHeader}>
-                      <span>Student</span>
-                      <span>Status</span>
-                      <span>Expires</span>
-                      <span>Action</span>
+                      <span>Студент</span>
+                      <span>Статус</span>
+                      <span>Истекает</span>
+                      <span>Действие</span>
                     </div>
                     {data.tokens.map((token) => (
                       <div className={styles.miniTableRow} key={token.id}>
                         <span>
-                          <strong>{token.user?.fullName || token.user?.email || "Student"}</strong>
-                          <small>{token.enrollment?.course?.title || "Course"}</small>
+                          <strong>{token.user?.fullName || token.user?.email || "Студент"}</strong>
+                          <small>{token.enrollment?.course?.title || "Курс"}</small>
                         </span>
                         <span className={badgeClass(token.status)}>{token.status}</span>
                         <span>{formatDateTime(token.activationExpiresAt)}</span>
@@ -1043,7 +1075,7 @@ export default function SecureCourseAdminPage() {
                               onClick={() => handleRevokeToken(token.id)}
                               type="button"
                             >
-                              Revoke
+                              Отозвать
                             </button>
                           ) : (
                             <span className={styles.helperText}>-</span>
@@ -1053,27 +1085,27 @@ export default function SecureCourseAdminPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className={styles.helperText}>No tokens issued yet.</p>
+                  <p className={styles.helperText}>Ещё не было выдано токенов.</p>
                 )}
               </div>
 
               <div className={styles.surfaceGrid}>
-                <p className={styles.surfaceEyebrow}>Sessions</p>
+                <p className={styles.surfaceEyebrow}>Активные сессии веб-плеера</p>
                 {loading && !data.sessions.length ? (
-                  <p className={styles.helperText}>Loading sessions...</p>
+                  <p className={styles.helperText}>Загружаем сессии...</p>
                 ) : data.sessions.length ? (
                   <div className={styles.miniTable}>
                     <div className={styles.miniTableHeader}>
-                      <span>Student</span>
-                      <span>Status</span>
-                      <span>Last seen</span>
-                      <span>Action</span>
+                      <span>Студент</span>
+                      <span>Статус</span>
+                      <span>Последний онлайн</span>
+                      <span>Действие</span>
                     </div>
                     {data.sessions.map((session) => (
                       <div className={styles.miniTableRow} key={session.id}>
                         <span>
-                          <strong>{session.user?.fullName || session.user?.email || "Student"}</strong>
-                          <small>{session.deviceLabel || "Web browser"}</small>
+                          <strong>{session.user?.fullName || session.user?.email || "Студент"}</strong>
+                          <small>{session.deviceLabel || "С браузера"}</small>
                         </span>
                         <span className={badgeClass(session.status)}>{session.status}</span>
                         <span>{formatDateTime(session.lastSeenAt)}</span>
@@ -1085,7 +1117,7 @@ export default function SecureCourseAdminPage() {
                               onClick={() => handleRevokeSession(session.id)}
                               type="button"
                             >
-                              Revoke
+                              Отключить (Выкинуть)
                             </button>
                           ) : (
                             <span className={styles.helperText}>-</span>
@@ -1095,7 +1127,7 @@ export default function SecureCourseAdminPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className={styles.helperText}>No active student sessions yet.</p>
+                  <p className={styles.helperText}>Сейчас никто из студентов не смотрит курс.</p>
                 )}
               </div>
             </div>
@@ -1106,26 +1138,26 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Video assets</p>
-                <h2 className={styles.surfaceTitle}>Upload pipeline</h2>
+                <p className={styles.surfaceEyebrow}>Видео материалы</p>
+                <h2 className={styles.surfaceTitle}>Транскодинг</h2>
               </div>
             </div>
             <div style={{ padding: "2rem" }}>
               {loading && !data.uploads.length ? (
-                <p className={styles.helperText}>Loading uploads...</p>
+                <p className={styles.helperText}>Загрузки...</p>
               ) : data.uploads.length ? (
                 <div className={styles.miniTable}>
                   <div className={styles.miniTableHeader}>
-                    <span>Lesson</span>
-                    <span>Status</span>
-                    <span>Provider</span>
-                    <span>Updated</span>
+                    <span>Урок</span>
+                    <span>Статус</span>
+                    <span>Провайдер</span>
+                    <span>Обновлен</span>
                   </div>
                   {data.uploads.map((asset) => (
                     <div className={styles.miniTableRow} key={asset.id}>
                       <span>
-                        <strong>{asset.lessonTitle || "Lesson video"}</strong>
-                        <small>{asset.courseTitle || "Course"}</small>
+                        <strong>{asset.lessonTitle || "Видео урока"}</strong>
+                        <small>{asset.courseTitle || "Курс"}</small>
                       </span>
                       <span className={badgeClass(asset.status)}>{asset.status}</span>
                       <span>{asset.provider}</span>
@@ -1134,7 +1166,7 @@ export default function SecureCourseAdminPage() {
                   ))}
                 </div>
               ) : (
-                <p className={styles.helperText}>No video assets yet.</p>
+                <p className={styles.helperText}>Нет загруженных видео.</p>
               )}
             </div>
           </article>
@@ -1142,26 +1174,26 @@ export default function SecureCourseAdminPage() {
           <article className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Audit log</p>
-                <h2 className={styles.surfaceTitle}>Recent actions</h2>
+                <p className={styles.surfaceEyebrow}>Аудит лог</p>
+                <h2 className={styles.surfaceTitle}>Последние действия</h2>
               </div>
             </div>
             <div style={{ padding: "2rem" }}>
               {loading && !data.logs.length ? (
-                <p className={styles.helperText}>Loading recent activity...</p>
+                <p className={styles.helperText}>Загружаем логи...</p>
               ) : data.logs.length ? (
                 <div className={styles.compactList}>
                   {data.logs.slice(0, 10).map((log) => (
                     <div className={styles.materialCard} key={log.id}>
                       <strong>{log.eventType}</strong>
                       <p className={styles.helperText}>
-                        {log.actorType} · {log.entityType || "system"} · {formatDateTime(log.createdAt)}
+                        {log.actorType} · {log.entityType || "системно"} · {formatDateTime(log.createdAt)}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className={styles.helperText}>No audit events yet.</p>
+                <p className={styles.helperText}>События безопасности отсутствуют.</p>
               )}
             </div>
           </article>

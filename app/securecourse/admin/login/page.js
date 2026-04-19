@@ -34,21 +34,21 @@ function LoginForm() {
 
   return (
     <section className={styles.callout} style={{ width: "100%", maxWidth: "440px" }}>
-      <p className={styles.surfaceEyebrow}>Admin Auth</p>
+      <p className={styles.surfaceEyebrow}>Админ-доступ</p>
       <h1 className={styles.calloutTitle} style={{ marginBottom: "1rem" }}>
-        Sign in to SecureCourse admin
+        Вход в панель управления
       </h1>
       <p className={styles.helperText} style={{ marginBottom: "1.2rem" }}>
-        This page is only for `ADMIN` and `MANAGER` users. Students never register or sign in with a password.
+        Только для сотрудников и кураторов. Студенты заходят по одноразовым токенам на главной странице.
       </p>
 
       <form className={styles.formStack} onSubmit={handleSubmit}>
         <label className={styles.fieldGroup}>
-          <span className={styles.fieldLabel}>Admin email or username</span>
+          <span className={styles.fieldLabel}>Логин или Email</span>
           <input
             className={styles.fieldInput}
             onChange={(event) => setLogin(event.target.value)}
-            placeholder="admin or admin@securecourse.local"
+            placeholder="manager"
             required
             type="text"
             value={login}
@@ -56,11 +56,11 @@ function LoginForm() {
         </label>
 
         <label className={styles.fieldGroup}>
-          <span className={styles.fieldLabel}>Password</span>
+          <span className={styles.fieldLabel}>Пароль</span>
           <input
             className={styles.fieldInput}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter admin password"
+            placeholder="Введите пароль"
             required
             type="password"
             value={password}
@@ -75,16 +75,15 @@ function LoginForm() {
           style={{ width: "100%", justifyContent: "center" }}
           type="submit"
         >
-          {loading ? "Signing in..." : "Open admin panel"}
+          {loading ? "Авторизация..." : "Войти"}
         </button>
+        
+        <div style={{ marginTop: "1rem", textAlign: "center" }}>
+           <Link href="/securecourse" className={styles.inlineLinkButton}>
+             Вернуться на главную страницу (для студентов)
+           </Link>
+        </div>
       </form>
-
-      <ul className={styles.ruleList} style={{ marginTop: "1.25rem" }}>
-        <li>Bootstrap admin credentials come from `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.</li>
-        <li>This Railway deploy runs as one Next.js service, so no separate API URL is required.</li>
-        <li>Students do not use this screen. They activate one-time tokens on the public SecureCourse page.</li>
-        <li>The browser stores only an HTTP-only admin session cookie.</li>
-      </ul>
     </section>
   );
 }
