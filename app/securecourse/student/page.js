@@ -307,7 +307,7 @@ export default function SecureCourseStudentPage() {
             </div>
           </div>
 
-          <div className={s.gridThree} style={{ padding: "2rem" }}>
+          <div className={`${s.gridThree} ${s.panelBody}`}>
             <div className={s.materialCard}>
               <p className={s.surfaceEyebrow}>Ученик</p>
               <strong>{session.user?.fullName || "Ученический доступ"}</strong>
@@ -329,7 +329,7 @@ export default function SecureCourseStudentPage() {
         {error ? <p className={s.feedbackError}>{error}</p> : null}
         {notice ? <p className={s.feedbackSuccess}>{notice}</p> : null}
 
-        <section className={s.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${s.gridTwo} ${s.sectionSpacingTop}`}>
           <div className={s.surface}>
             <div className={s.surfaceHeader}>
               <div>
@@ -338,7 +338,7 @@ export default function SecureCourseStudentPage() {
               </div>
             </div>
 
-            <div style={{ padding: "2rem" }}>
+            <div className={s.panelBody}>
               {!courses.length ? (
                 <p className={s.helperText}>Пока нет активных зачислений. Попросите менеджера назначить курс.</p>
               ) : (
@@ -402,7 +402,7 @@ export default function SecureCourseStudentPage() {
               </div>
             </div>
 
-            <div style={{ padding: "2rem", display: "grid", gap: "1.25rem" }}>
+            <div className={s.surfaceContent}>
               {lessonState.loading ? <p className={s.helperText}>Загружаем урок и доступ к видео...</p> : null}
 
               {!lessonState.loading && !lessonState.lesson ? (
@@ -427,7 +427,7 @@ export default function SecureCourseStudentPage() {
                         style={{ width: "100%", display: "block", aspectRatio: "16 / 9", background: "#000" }}
                       />
                     ) : (
-                      <div style={{ padding: "2rem", minHeight: "18rem", display: "grid", placeItems: "center" }}>
+                      <div className={s.videoPlaceholder}>
                         <p className={s.helperText}>{lessonState.error || "Видео еще не готово."}</p>
                       </div>
                     )}

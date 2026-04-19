@@ -107,7 +107,7 @@ export default function SecureCourseActivationPanel() {
         </p>
       </div>
 
-      <div className={styles.gridTwo} style={{ padding: "2rem" }}>
+      <div className={`${styles.gridTwo} ${styles.panelBody}`}>
         <form className={styles.formStack} onSubmit={handleActivate}>
           <label className={styles.fieldGroup}>
             <span className={styles.fieldLabel}>Одноразовый токен</span>

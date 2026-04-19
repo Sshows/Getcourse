@@ -656,7 +656,7 @@ export default function SecureCourseAdminPage() {
         {error ? <p className={styles.feedbackError}>{error}</p> : null}
         {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
-        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
@@ -665,7 +665,7 @@ export default function SecureCourseAdminPage() {
               </div>
             </div>
 
-            <form className={styles.formStack} onSubmit={handleCreateUser} style={{ padding: "2rem" }}>
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleCreateUser}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Имя и фамилия</span>
                 <input
@@ -704,7 +704,7 @@ export default function SecureCourseAdminPage() {
               </div>
             </div>
 
-            <form className={styles.formStack} onSubmit={handleCreateCourse} style={{ padding: "2rem" }}>
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleCreateCourse}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Название курса</span>
                 <input
@@ -746,7 +746,7 @@ export default function SecureCourseAdminPage() {
           </section>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
@@ -755,7 +755,7 @@ export default function SecureCourseAdminPage() {
               </div>
             </div>
 
-            <form className={styles.formStack} onSubmit={handleCreateLesson} style={{ padding: "2rem" }}>
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleCreateLesson}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Курс</span>
                 <select
@@ -838,7 +838,7 @@ export default function SecureCourseAdminPage() {
               </div>
             </div>
 
-            <form className={styles.formStack} onSubmit={handleCreateEnrollment} style={{ padding: "2rem 2rem 1rem" }}>
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleCreateEnrollment}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Ученик</span>
                 <select
@@ -882,7 +882,7 @@ export default function SecureCourseAdminPage() {
               </button>
             </form>
 
-            <form className={styles.formStack} onSubmit={handleIssueToken} style={{ padding: "0 2rem 2rem" }}>
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleIssueToken} style={{ paddingTop: 0 }}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Активное зачисление</span>
                 <select
@@ -921,7 +921,7 @@ export default function SecureCourseAdminPage() {
             </div>
           </div>
 
-          <div style={{ padding: "2rem" }}>
+          <div className={styles.panelBody}>
             {lastIssuedToken ? (
               <div className={styles.tokenReveal}>
                 <p className={styles.surfaceEyebrow}>Одноразовый код доступа</p>
@@ -968,7 +968,7 @@ export default function SecureCourseAdminPage() {
             </div>
           </div>
 
-          <form className={styles.gridTwo} onSubmit={handleUploadVideo} style={{ padding: "2rem" }}>
+          <form className={`${styles.gridTwo} ${styles.panelBody}`} onSubmit={handleUploadVideo}>
             <div className={styles.formStack}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Урок</span>
@@ -1032,7 +1032,7 @@ export default function SecureCourseAdminPage() {
           </form>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
@@ -1098,7 +1098,7 @@ export default function SecureCourseAdminPage() {
           </section>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
@@ -1185,7 +1185,7 @@ export default function SecureCourseAdminPage() {
           </section>
         </section>
 
-        <section className={styles.gridTwo} style={{ paddingTop: "2rem" }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
