@@ -54,6 +54,21 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatCountdown(value) {
+  if (!value) {
+    return "";
+  }
+
+  const diff = Math.max(0, Math.floor((new Date(value).getTime() - Date.now()) / 1000));
+  const hours = Math.floor(diff / 3600);
+  const minutes = Math.floor((diff % 3600) / 60);
+  const seconds = diff % 60;
+
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 function slugify(value) {
   return String(value || "")
     .toLowerCase()
@@ -66,29 +81,40 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function SessionTimer({ startedAt, status }) {
-  const [elapsed, setElapsed] = useState("");
+function SessionCountdown({ expiresAt, status }) {
+  const [remaining, setRemaining] = useState("");
 
   useEffect(() => {
     if (status !== "ACTIVE") {
-      setElapsed("");
+      setRemaining("");
       return;
     }
-    const update = () => {
-      const diff = Math.floor((Date.now() - new Date(startedAt || Date.now()).getTime()) / 1000);
-      if (diff < 0) return;
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      const s = diff % 60;
-      setElapsed(`( ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} )`);
-    };
-    update();
-    const inv = setInterval(update, 1000);
-    return () => clearInterval(inv);
-  }, [startedAt, status]);
 
-  if (status !== "ACTIVE" || !elapsed) return null;
-  return <span style={{ marginLeft: "8px", marginRight: "4px", fontVariantNumeric: "tabular-nums", opacity: 0.6, fontSize: "0.85em" }}>{elapsed}</span>;
+    const update = () => setRemaining(formatCountdown(expiresAt));
+    update();
+    const timer = setInterval(update, 1000);
+
+    return () => clearInterval(timer);
+  }, [expiresAt, status]);
+
+  if (status !== "ACTIVE" || !remaining) {
+    return null;
+  }
+
+  return (
+    <span
+      style={{
+        marginLeft: "8px",
+        marginRight: "4px",
+        fontVariantNumeric: "tabular-nums",
+        opacity: 0.72,
+        fontSize: "0.85em",
+        whiteSpace: "nowrap"
+      }}
+    >
+      до авто-выхода {remaining}
+    </span>
+  );
 }
 
 export default function SecureCourseAdminPage() {
@@ -120,7 +146,8 @@ export default function SecureCourseAdminPage() {
   const [forms, setForms] = useState({
     createUser: {
       fullName: "",
-      email: ""
+      email: "",
+      phone: ""
     },
     createCourse: {
       title: "",
@@ -189,6 +216,22 @@ export default function SecureCourseAdminPage() {
     [forms.upload.lessonId, lessonOptions]
   );
 
+  const verifiedStudentsCount = useMemo(
+    () => students.filter((student) => student.studentAccount?.fullyVerified).length,
+    [students]
+  );
+
+  const pendingVerificationCount = useMemo(
+    () =>
+      students.filter(
+        (student) =>
+          student.studentAccount &&
+          !student.studentAccount.fullyVerified &&
+          student.studentAccount.status !== "BLOCKED"
+      ).length,
+    [students]
+  );
+
   async function loadAdminData(options = {}) {
     const showSpinner = options.showSpinner ?? true;
 
@@ -209,7 +252,7 @@ export default function SecureCourseAdminPage() {
         return null;
       }
 
-      setError(requestError.message || "Не удалось загрузить админку.");
+      setError(requestError.message || "Не удалось загрузить данные админки.");
       return null;
     } finally {
       if (showSpinner) {
@@ -274,6 +317,7 @@ export default function SecureCourseAdminPage() {
       const created = await createUser({
         email: forms.createUser.email,
         fullName: forms.createUser.fullName,
+        phone: forms.createUser.phone,
         role: "STUDENT",
         status: "ACTIVE"
       });
@@ -282,14 +326,16 @@ export default function SecureCourseAdminPage() {
         ...current,
         createUser: {
           fullName: "",
-          email: ""
+          email: "",
+          phone: ""
         },
         enrollment: {
           ...current.enrollment,
           userId: created.id
         }
       }));
-      setNotice("Ученик создан. Следующий шаг - зачислить его на курс.");
+
+      setNotice("Ученик создан. Теперь назначьте ему курс и выпустите токен.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Не удалось создать ученика.");
@@ -330,7 +376,8 @@ export default function SecureCourseAdminPage() {
           courseId: course.id
         }
       }));
-      setNotice("Курс создан. Теперь добавьте первый урок.");
+
+      setNotice("Курс создан. Следующий шаг — добавить урок и материалы.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Не удалось создать курс.");
@@ -376,6 +423,7 @@ export default function SecureCourseAdminPage() {
           lessonId: lesson.id
         }
       }));
+
       setNotice("Урок создан. Теперь можно загрузить видео.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
@@ -404,7 +452,8 @@ export default function SecureCourseAdminPage() {
           enrollmentId: enrollment.id
         }
       }));
-      setNotice("Зачисление создано. Теперь можно выдать токен.");
+
+      setNotice("Зачисление создано. Теперь можно сгенерировать токен доступа.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Не удалось зачислить ученика.");
@@ -438,6 +487,7 @@ export default function SecureCourseAdminPage() {
         token: issued.token,
         studentName: enrollment.user.fullName,
         studentEmail: enrollment.user.email,
+        studentPhone: enrollment.user.phone || enrollment.user.studentAccount?.phone || "",
         courseTitle: enrollment.course.title,
         status: issued.status,
         expiresAt: issued.activationExpiresAt
@@ -458,7 +508,7 @@ export default function SecureCourseAdminPage() {
       setCopiedToken(rawToken);
       setNotice("Токен скопирован. Теперь его можно отправить ученику.");
     } catch {
-      setError("Не удалось скопировать токен. Скопируйте его вручную.");
+      setError("Не удалось скопировать токен автоматически. Скопируйте его вручную.");
     }
   }
 
@@ -485,7 +535,7 @@ export default function SecureCourseAdminPage() {
 
     try {
       await revokeSession(sessionId, "revoked_by_manager");
-      setNotice("Сессия ученика завершена.");
+      setNotice("Сессия завершена менеджером.");
       await loadAdminData({ showSpinner: false });
     } catch (requestError) {
       setError(requestError.message || "Не удалось завершить сессию.");
@@ -500,27 +550,28 @@ export default function SecureCourseAdminPage() {
     setError("");
     setNotice("");
 
+    if (!selectedUploadLesson) {
+      setBusyAction("");
+      setError("Сначала выберите урок для загрузки видео.");
+      return;
+    }
+
+    if (!selectedUploadFile) {
+      setBusyAction("");
+      setError("Выберите видеофайл.");
+      return;
+    }
+
     try {
-      if (!forms.upload.lessonId) {
-        throw new Error("Сначала выберите урок.");
-      }
-
-      if (!selectedUploadFile) {
-        throw new Error("Выберите видеофайл для загрузки.");
-      }
-
       const intent = await createUploadIntent({
         lessonId: forms.upload.lessonId,
-        provider: forms.upload.provider,
-        fileName: selectedUploadFile.name,
-        fileSize: selectedUploadFile.size,
-        mimeType: selectedUploadFile.type
+        provider: forms.upload.provider
       });
 
       setUploadState({
         assetId: intent.assetId,
         status: intent.status,
-        lessonTitle: selectedUploadLesson?.title || "Урок",
+        lessonTitle: selectedUploadLesson.title,
         fileName: selectedUploadFile.name
       });
 
@@ -542,11 +593,10 @@ export default function SecureCourseAdminPage() {
       setUploadState({
         assetId: intent.assetId,
         status: uploadPayload?.asset?.status || "processing",
-        lessonTitle: selectedUploadLesson?.title || "Урок",
+        lessonTitle: selectedUploadLesson.title,
         fileName: selectedUploadFile.name
       });
-
-      setNotice("Файл получен. Идет обработка видео...");
+      setNotice("Файл загружен. Идет обработка видео...");
 
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await wait(700);
@@ -557,7 +607,7 @@ export default function SecureCourseAdminPage() {
           setUploadState({
             assetId: currentAsset.id,
             status: currentAsset.status,
-            lessonTitle: currentAsset.lessonTitle || selectedUploadLesson?.title || "Урок",
+            lessonTitle: currentAsset.lessonTitle || selectedUploadLesson.title,
             fileName: currentAsset.fileName || selectedUploadFile.name
           });
         }
@@ -569,7 +619,6 @@ export default function SecureCourseAdminPage() {
 
       await loadAdminData({ showSpinner: false });
       setSelectedUploadFile(null);
-
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -605,10 +654,12 @@ export default function SecureCourseAdminPage() {
           <div className={styles.heroGrid}>
             <div className={styles.heroCopy}>
               <p className={styles.surfaceEyebrow}>Админка продукта</p>
-              <h1 className={styles.heroTitle}>Управление курсами по IELTS, английскому и поступлению за рубеж.</h1>
+              <h1 className={styles.heroTitle}>
+                Управление курсами по IELTS, английскому и поступлению за рубеж.
+              </h1>
               <p className={styles.heroLead}>
-                Здесь менеджер создает ученика, курс и урок, зачисляет студента, выдает одноразовый токен и загружает
-                видео. Flow должен быть прямым: ученик - курс - урок - зачисление - токен - активация - просмотр.
+                Здесь менеджер создает ученика, курс и урок, зачисляет ученика, выдает одноразовый токен,
+                контролирует сессии и загружает видео. Весь flow должен проходиться без пустых шагов и тупиков.
               </p>
               <div className={styles.heroActions}>
                 <button className={styles.solidButton} onClick={() => loadAdminData()} type="button">
@@ -633,20 +684,36 @@ export default function SecureCourseAdminPage() {
               <div className={styles.panelList}>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>{adminSession?.user?.fullName || adminSession?.user?.username || "Команда SecureCourse"}</strong>
-                    <p>{adminSession?.user?.email || "Серверная сессия администратора активна."}</p>
+                    <strong>
+                      {adminSession?.user?.fullName || adminSession?.user?.username || "Команда SecureCourse"}
+                    </strong>
+                    <p>
+                      {adminSession?.user?.email || "Активная серверная сессия админки"}
+                      {adminSession?.user?.role ? ` • ${adminSession.user.role}` : ""}
+                    </p>
+                  </div>
+                </article>
+                <article className={styles.heroCard}>
+                  <div>
+                    <strong>Сессия админки активна</strong>
+                    <p>
+                      Последняя активность: {formatDateTime(adminSession?.session?.lastSeenAt)} • истекает:{" "}
+                      {formatDateTime(adminSession?.session?.expiresAt)}
+                    </p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
                     <strong>Базовые программы уже загружены</strong>
-                    <p>IELTS Writing, Speaking, scholarships, personal statement, documents и admission timeline.</p>
+                    <p>
+                      IELTS Writing, Speaking, scholarships, personal statement, admission documents и timeline.
+                    </p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
                     <strong>Как дать доступ ученику</strong>
-                    <p>Зачислите на курс, выпустите токен, скопируйте код и отправьте его ученику на публичную страницу.</p>
+                    <p>Создайте ученика, назначьте курс, выпустите токен, скопируйте его и отправьте на активацию.</p>
                   </div>
                 </article>
               </div>
@@ -658,7 +725,9 @@ export default function SecureCourseAdminPage() {
           <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Ученики</span>
             <strong className={styles.metricValue}>{data.metrics.totalUsers}</strong>
-            <span className={styles.statusMeta}>{data.metrics.activeUsers} активных</span>
+            <span className={styles.statusMeta}>
+              {verifiedStudentsCount} verified • {pendingVerificationCount} ждут подтверждение
+            </span>
           </article>
           <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Токены сегодня</span>
@@ -668,12 +737,12 @@ export default function SecureCourseAdminPage() {
           <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Активные сессии</span>
             <strong className={styles.metricValue}>{data.metrics.activeSessions}</strong>
-            <span className={styles.statusMeta}>Одновременно у ученика только 1 сессия</span>
+            <span className={styles.statusMeta}>У ученика одновременно только одна активная сессия</span>
           </article>
           <article className={styles.metricCard}>
             <span className={styles.metricLabel}>Готовые видео</span>
             <strong className={styles.metricValue}>{data.metrics.readyVideoAssets}</strong>
-            <span className={styles.statusMeta}>Video assets в статусе ready</span>
+            <span className={styles.statusMeta}>Видео доступны к просмотру</span>
           </article>
         </section>
 
@@ -712,6 +781,17 @@ export default function SecureCourseAdminPage() {
                   required
                   type="email"
                   value={forms.createUser.email}
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Телефон</span>
+                <input
+                  className={styles.fieldInput}
+                  onChange={(event) => updateForm("createUser", "phone", event.target.value)}
+                  placeholder="+7 777 123 45 67"
+                  type="tel"
+                  value={forms.createUser.phone}
                 />
               </label>
 
@@ -839,17 +919,13 @@ export default function SecureCourseAdminPage() {
                 <textarea
                   className={styles.fieldTextarea}
                   onChange={(event) => updateForm("lesson", "notes", event.target.value)}
-                  placeholder="Сюда можно сразу добавить текстовый материал к уроку"
-                  rows={5}
+                  placeholder="Ключевые тезисы, шаблоны, checklist, полезные ссылки"
+                  rows={4}
                   value={forms.lesson.notes}
                 />
               </label>
 
-              <button
-                className={styles.solidButton}
-                disabled={busyAction === "create-lesson" || !forms.lesson.courseId}
-                type="submit"
-              >
+              <button className={styles.solidButton} disabled={busyAction === "create-lesson"} type="submit">
                 {busyAction === "create-lesson" ? "Создаем..." : "Создать урок"}
               </button>
             </form>
@@ -858,8 +934,8 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Шаг 4 и 5</p>
-                <h2 className={styles.surfaceTitle}>Зачислить и выдать токен</h2>
+                <p className={styles.surfaceEyebrow}>Шаг 4</p>
+                <h2 className={styles.surfaceTitle}>Зачислить ученика на курс</h2>
               </div>
             </div>
 
@@ -873,11 +949,15 @@ export default function SecureCourseAdminPage() {
                 >
                   {students.map((student) => (
                     <option key={student.id} value={student.id}>
-                      {student.fullName} — {student.email}
+                      {student.fullName}
                     </option>
                   ))}
                 </select>
               </label>
+
+              {!students.length ? (
+                <p className={styles.helperText}>Пока нет учеников. Создайте первого ученика в шаге 1.</p>
+              ) : null}
 
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Курс</span>
@@ -894,8 +974,8 @@ export default function SecureCourseAdminPage() {
                 </select>
               </label>
 
-              {!students.length || !courses.length ? (
-                <p className={styles.helperText}>Для зачисления нужен хотя бы один ученик и один курс.</p>
+              {!courses.length ? (
+                <p className={styles.helperText}>Пока нет курсов. Создайте курс в шаге 2.</p>
               ) : null}
 
               <button
@@ -903,11 +983,22 @@ export default function SecureCourseAdminPage() {
                 disabled={busyAction === "create-enrollment" || !forms.enrollment.userId || !forms.enrollment.courseId}
                 type="submit"
               >
-                {busyAction === "create-enrollment" ? "Зачисляем..." : "Зачислить на курс"}
+                {busyAction === "create-enrollment" ? "Назначаем..." : "Назначить курс"}
               </button>
             </form>
+          </section>
+        </section>
 
-            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleIssueToken} style={{ paddingTop: 0 }}>
+        <section className={`${styles.gridTwo} ${styles.sectionSpacingTop}`}>
+          <section className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Шаг 5</p>
+                <h2 className={styles.surfaceTitle}>Сгенерировать токен</h2>
+              </div>
+            </div>
+
+            <form className={`${styles.formStack} ${styles.panelBody}`} onSubmit={handleIssueToken}>
               <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Активное зачисление</span>
                 <select
@@ -936,56 +1027,61 @@ export default function SecureCourseAdminPage() {
               </button>
             </form>
           </section>
-        </section>
 
-        <section className={styles.surface} style={{ marginTop: "2rem" }}>
-          <div className={styles.surfaceHeader}>
-            <div>
-              <p className={styles.surfaceEyebrow}>Результат токена</p>
-              <h2 className={styles.surfaceTitle}>После генерации код сразу виден и готов к копированию.</h2>
-            </div>
-          </div>
-
-          <div className={styles.panelBody}>
-            {lastIssuedToken ? (
-              <div className={styles.tokenReveal}>
-                <p className={styles.surfaceEyebrow}>Одноразовый код доступа</p>
-                <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
-                <div className={styles.tokenRevealMeta}>
-                  <span>
-                    <strong>Студент:</strong> {lastIssuedToken.studentName}
-                  </span>
-                  <span>
-                    <strong>Email:</strong> {lastIssuedToken.studentEmail}
-                  </span>
-                  <span>
-                    <strong>Курс:</strong> {lastIssuedToken.courseTitle}
-                  </span>
-                  <span>
-                    <strong>Статус:</strong> {lastIssuedToken.status}
-                  </span>
-                  <span>
-                    <strong>Сгорит:</strong> {formatDateTime(lastIssuedToken.expiresAt)}
-                  </span>
-                </div>
-                <div className={styles.heroActions}>
-                  <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
-                    {copiedToken === lastIssuedToken.token ? "Скопировано" : "Скопировать токен"}
-                  </button>
-                  <Link
-                    className={styles.outlineButton}
-                    href={`/securecourse?token=${encodeURIComponent(lastIssuedToken.token)}#activation`}
-                  >
-                    Перейти к активации
-                  </Link>
-                </div>
+          <section className={styles.surface}>
+            <div className={styles.surfaceHeader}>
+              <div>
+                <p className={styles.surfaceEyebrow}>Результат токена</p>
+                <h2 className={styles.surfaceTitle}>Код сразу виден, копируется и ведет на активацию.</h2>
               </div>
-            ) : (
-              <p className={styles.helperText}>
-                Здесь появится последний сгенерированный токен: код, студент, курс, статус и время истечения.
-              </p>
-            )}
-          </div>
+            </div>
+
+            <div className={styles.panelBody}>
+              {lastIssuedToken ? (
+                <div className={styles.tokenReveal}>
+                  <p className={styles.surfaceEyebrow}>Одноразовый код доступа</p>
+                  <code className={styles.tokenRevealValue}>{lastIssuedToken.token}</code>
+                  <div className={styles.tokenRevealMeta}>
+                    <span>
+                      <strong>Студент:</strong> {lastIssuedToken.studentName}
+                    </span>
+                    <span>
+                      <strong>Email:</strong> {lastIssuedToken.studentEmail}
+                    </span>
+                    {lastIssuedToken.studentPhone ? (
+                      <span>
+                        <strong>Телефон:</strong> {lastIssuedToken.studentPhone}
+                      </span>
+                    ) : null}
+                    <span>
+                      <strong>Курс:</strong> {lastIssuedToken.courseTitle}
+                    </span>
+                    <span>
+                      <strong>Статус:</strong> {lastIssuedToken.status}
+                    </span>
+                    <span>
+                      <strong>Сгорит:</strong> {formatDateTime(lastIssuedToken.expiresAt)}
+                    </span>
+                  </div>
+                  <div className={styles.heroActions}>
+                    <button className={styles.solidButton} onClick={() => handleCopyToken(lastIssuedToken.token)} type="button">
+                      {copiedToken === lastIssuedToken.token ? "Скопировано" : "Скопировать токен"}
+                    </button>
+                    <Link
+                      className={styles.outlineButton}
+                      href={`/securecourse?token=${encodeURIComponent(lastIssuedToken.token)}#activation`}
+                    >
+                      Перейти к активации
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <p className={styles.helperText}>
+                  После генерации здесь появится код токена, ученик, курс, статус и дата истечения.
+                </p>
+              )}
+            </div>
+          </section>
         </section>
 
         <section className={styles.surface} style={{ marginTop: "2rem" }}>
@@ -1018,6 +1114,17 @@ export default function SecureCourseAdminPage() {
               ) : null}
 
               <label className={styles.fieldGroup}>
+                <span className={styles.fieldLabel}>Провайдер</span>
+                <select
+                  className={styles.fieldSelect}
+                  onChange={(event) => updateForm("upload", "provider", event.target.value)}
+                  value={forms.upload.provider}
+                >
+                  <option value="RAILWAY_LOCAL">Railway local storage</option>
+                </select>
+              </label>
+
+              <label className={styles.fieldGroup}>
                 <span className={styles.fieldLabel}>Видео файл</span>
                 <input
                   accept="video/*"
@@ -1038,24 +1145,28 @@ export default function SecureCourseAdminPage() {
             </div>
 
             <div className={styles.callout}>
-              <p className={styles.surfaceEyebrow}>Текущее состояние загрузки</p>
+              <p className={styles.surfaceEyebrow}>Статус upload flow</p>
               <h3 className={styles.calloutTitle}>
-                {uploadState ? `${uploadState.lessonTitle}: ${uploadState.status}` : "Загрузка еще не запускалась"}
+                {uploadState?.lessonTitle || selectedUploadLesson?.title || "Выберите урок и видеофайл"}
               </h3>
-              <p className={styles.helperText} style={{ color: "var(--text-soft)" }}>
-                Ожидаемый процесс: waiting_upload, затем uploading, processing и ready. Как только статус дойдет до
-                ready, урок можно будет открыть в кабинете ученика.
+              <div className={styles.compactList}>
+                <span>
+                  <strong>Статус:</strong>{" "}
+                  <span className={badgeClass(uploadState?.status || "waiting_upload")}>
+                    {uploadState?.status || "waiting_upload"}
+                  </span>
+                </span>
+                <span>
+                  <strong>Файл:</strong> {uploadState?.fileName || selectedUploadFile?.name || "Еще не выбран"}
+                </span>
+                <span>
+                  <strong>Урок:</strong> {uploadState?.lessonTitle || selectedUploadLesson?.title || "-"}
+                </span>
+              </div>
+              <p className={styles.helperText}>
+                Flow: создается upload intent, файл уходит напрямую в upload route, затем UI обновляет статусы
+                waiting_upload → uploading → processing → ready.
               </p>
-
-              {uploadState ? (
-                <div className={styles.compactList}>
-                  <span>ID: {uploadState.assetId}</span>
-                  <span>Файл: {uploadState.fileName}</span>
-                  <span className={badgeClass(uploadState.status)}>{uploadState.status}</span>
-                </div>
-              ) : (
-                <p className={styles.helperText}>Выберите урок, выберите файл и запустите upload flow.</p>
-              )}
             </div>
           </form>
         </section>
@@ -1064,23 +1175,47 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Students</p>
-                <h2 className={styles.surfaceTitle}>Ученики и их зачисления</h2>
+                <p className={styles.surfaceEyebrow}>Ученики</p>
+                <h2 className={styles.surfaceTitle}>Ученики и их доступ</h2>
               </div>
             </div>
 
             <div className={styles.miniTable}>
               <div className={styles.miniTableHeader}>
                 <span>Ученик</span>
-                <span>Email</span>
+                <span>Контакты</span>
+                <span>Аккаунт</span>
                 <span>Курсы</span>
               </div>
 
               {students.length ? (
                 students.map((student) => (
                   <div className={styles.miniTableRow} key={student.id}>
-                    <strong>{student.fullName}</strong>
-                    <small>{student.email}</small>
+                    <strong>
+                      {student.fullName}
+                      {student.status !== "ACTIVE" ? ` (${student.status})` : ""}
+                    </strong>
+                    <small>
+                      {student.email}
+                      {student.phone ? <><br />{student.phone}</> : null}
+                    </small>
+                    <small>
+                      {student.studentAccount ? (
+                        <>
+                          <span className={badgeClass(student.studentAccount.status)}>{student.studentAccount.status}</span>
+                          <br />
+                          {student.studentAccount.fullyVerified ? "email и телефон подтверждены" : "ждет email/SMS verification"}
+                          {student.studentAccount.lastLoginAt ? (
+                            <>
+                              <br />
+                              последний вход: {formatDateTime(student.studentAccount.lastLoginAt)}
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        "Профиль создан администратором, самостоятельный вход не настроен"
+                      )}
+                    </small>
                     <small>{(student.enrollments || []).length || 0}</small>
                   </div>
                 ))
@@ -1095,7 +1230,7 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Courses</p>
+                <p className={styles.surfaceEyebrow}>Курсы</p>
                 <h2 className={styles.surfaceTitle}>Курсы и уроки</h2>
               </div>
             </div>
@@ -1130,8 +1265,8 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Tokens</p>
-                <h2 className={styles.surfaceTitle}>Одноразовые токены</h2>
+                <p className={styles.surfaceEyebrow}>Токены</p>
+                <h2 className={styles.surfaceTitle}>Одноразовые токены доступа</h2>
               </div>
             </div>
 
@@ -1157,15 +1292,14 @@ export default function SecureCourseAdminPage() {
                         onClick={() => handleRevokeToken(token.id)}
                         type="button"
                       >
-                        revoke
+                        отозвать
                       </button>
                     </small>
                   </div>
                 ))
               ) : (
                 <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
-                  Токенов пока нет. После генерации они появятся здесь со статусами `ISSUED`, `USED`, `REVOKED` или
-                  `EXPIRED`.
+                  Токенов пока нет. После генерации они появятся здесь со статусами ISSUED, USED, REVOKED или EXPIRED.
                 </p>
               )}
             </div>
@@ -1174,7 +1308,7 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Sessions</p>
+                <p className={styles.surfaceEyebrow}>Сессии</p>
                 <h2 className={styles.surfaceTitle}>Активные и завершенные сессии учеников</h2>
               </div>
             </div>
@@ -1190,24 +1324,28 @@ export default function SecureCourseAdminPage() {
                 data.sessions.map((session) => (
                   <div className={styles.miniTableRow} key={session.id}>
                     <strong>{session.user?.fullName || session.userId}</strong>
-                    <small>{formatDateTime(session.startedAt || session.createdAt)}</small>
-                    <small style={{ display: 'flex', alignItems: 'center' }}>
+                    <small>
+                      старт: {formatDateTime(session.startedAt || session.createdAt)}
+                      <br />
+                      idle до: {formatDateTime(session.idleExpiresAt)}
+                    </small>
+                    <small style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}>
                       <span className={badgeClass(session.status)}>{session.status}</span>
-                      <SessionTimer startedAt={session.startedAt || session.createdAt} status={session.status} />
+                      <SessionCountdown expiresAt={session.idleExpiresAt || session.expiresAt} status={session.status} />
                       <button
                         className={styles.inlineLinkButton}
                         disabled={busyAction === `revoke-session-${session.id}` || session.status !== "ACTIVE"}
                         onClick={() => handleRevokeSession(session.id)}
                         type="button"
                       >
-                        revoke
+                        завершить
                       </button>
                     </small>
                   </div>
                 ))
               ) : (
                 <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
-                  Пока нет ученических сессий. Они появятся после активации токена на публичной странице.
+                  Пока нет ученических сессий. Они появятся после активации токена или входа ученика на сайте.
                 </p>
               )}
             </div>
@@ -1218,7 +1356,7 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Video pipeline</p>
+                <p className={styles.surfaceEyebrow}>Видео</p>
                 <h2 className={styles.surfaceTitle}>Статусы загрузок</h2>
               </div>
             </div>
@@ -1251,7 +1389,7 @@ export default function SecureCourseAdminPage() {
           <section className={styles.surface}>
             <div className={styles.surfaceHeader}>
               <div>
-                <p className={styles.surfaceEyebrow}>Recent activity</p>
+                <p className={styles.surfaceEyebrow}>Логи</p>
                 <h2 className={styles.surfaceTitle}>Последние действия системы</h2>
               </div>
             </div>
@@ -1273,7 +1411,7 @@ export default function SecureCourseAdminPage() {
                 ))
               ) : (
                 <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
-                  Логи появятся после действий в админке и после активации токенов учениками.
+                  Логи появятся после действий в админке, регистрации учеников, активации токенов и входов на сайт.
                 </p>
               )}
             </div>

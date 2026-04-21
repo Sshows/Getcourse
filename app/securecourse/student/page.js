@@ -48,13 +48,29 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatCountdown(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const diff = Math.max(0, Math.floor((new Date(value).getTime() - Date.now()) / 1000));
+  const hours = Math.floor(diff / 3600);
+  const minutes = Math.floor((diff % 3600) / 60);
+  const seconds = diff % 60;
+
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 export default function SecureCourseStudentPage() {
   const [session, setSession] = useState({
     checking: true,
     authenticated: false,
     user: null,
     userId: "",
-    sessionId: ""
+    sessionId: "",
+    sessionMeta: null
   });
   const [courses, setCourses] = useState([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
@@ -88,7 +104,8 @@ export default function SecureCourseStudentPage() {
           authenticated: false,
           user: null,
           userId: "",
-          sessionId: ""
+          sessionId: "",
+          sessionMeta: null
         });
         setCourses([]);
         return;
@@ -98,8 +115,9 @@ export default function SecureCourseStudentPage() {
         checking: false,
         authenticated: true,
         user: payload.user || null,
-        userId: payload.userId,
-        sessionId: payload.sessionId
+        userId: payload.userId || payload.user?.id || "",
+        sessionId: payload.sessionId || payload.session?.id || "",
+        sessionMeta: payload.session || null
       });
 
       await loadCourses();
@@ -109,9 +127,10 @@ export default function SecureCourseStudentPage() {
         authenticated: false,
         user: null,
         userId: "",
-        sessionId: ""
+        sessionId: "",
+        sessionMeta: null
       });
-      setError(requestError.message || "Не удалось проверить ученическую сессию.");
+      setError(requestError.message || "Не удалось проверить сессию ученика.");
     }
   }
 
@@ -124,8 +143,21 @@ export default function SecureCourseStudentPage() {
       return undefined;
     }
 
-    const timer = setInterval(() => {
-      heartbeatSession().catch(() => undefined);
+    const timer = setInterval(async () => {
+      try {
+        const heartbeat = await heartbeatSession();
+
+        if (heartbeat?.session) {
+          setSession((current) => ({
+            ...current,
+            sessionId: heartbeat.session.id || current.sessionId,
+            sessionMeta: heartbeat.session,
+            user: heartbeat.session.user || current.user
+          }));
+        }
+      } catch {
+        return undefined;
+      }
     }, 60_000);
 
     return () => clearInterval(timer);
@@ -202,7 +234,7 @@ export default function SecureCourseStudentPage() {
         completed: true,
         lastPositionSeconds: lessonState.progress?.lastPositionSeconds || 0
       });
-      setNotice("Прогресс обновлен. Урок отмечен как завершенный.");
+      setNotice("Прогресс сохранен. Урок отмечен как завершенный.");
       await loadCourses();
       await openLesson(lessonState.lesson.id);
     } catch (requestError) {
@@ -224,7 +256,8 @@ export default function SecureCourseStudentPage() {
         authenticated: false,
         user: null,
         userId: "",
-        sessionId: ""
+        sessionId: "",
+        sessionMeta: null
       });
       setCourses([]);
       setSelectedEnrollmentId("");
@@ -251,7 +284,7 @@ export default function SecureCourseStudentPage() {
           <section className={s.callout}>
             <p className={s.surfaceEyebrow}>Проверяем доступ</p>
             <h1 className={s.calloutTitle}>Смотрим, есть ли активная сессия ученика.</h1>
-            <p className={s.helperText}>Если токен уже был активирован, кабинет откроется автоматически.</p>
+            <p className={s.helperText}>Если токен уже активирован или ученик уже вошел через email/телефон, кабинет откроется автоматически.</p>
           </section>
         </div>
       </main>
@@ -264,18 +297,21 @@ export default function SecureCourseStudentPage() {
         <div className={s.ambient} aria-hidden="true" />
         <div className={s.shell}>
           <section className={s.callout}>
-            <p className={s.surfaceEyebrow}>Только по токену</p>
-            <h1 className={s.calloutTitle}>Сначала активируйте одноразовый токен на публичной странице.</h1>
+            <p className={s.surfaceEyebrow}>Доступ к кабинету</p>
+            <h1 className={s.calloutTitle}>Сначала активируйте токен или войдите через подтвержденный student account.</h1>
             <p className={s.helperText} style={{ color: "var(--text-soft)" }}>
-              Ученики не используют обычный логин и пароль. Менеджер выдает токен, а токен открывает доступ к
-              назначенным курсам по IELTS, английскому и admission documents.
+              На публичной странице ученик может либо ввести одноразовый токен от менеджера, либо зарегистрироваться по
+              email и телефону, пройти двойную верификацию и дальше заходить уже как в обычный web-кабинет.
             </p>
             {error ? <p className={s.feedbackError}>{error}</p> : null}
             <div className={s.heroActions}>
-              <Link className={s.solidButton} href="/securecourse">
+              <Link className={s.solidButton} href="/securecourse#activation">
                 Активировать токен
               </Link>
-              <Link className={s.outlineButton} href="/securecourse/admin/login">
+              <Link className={s.outlineButton} href="/securecourse#student-registration">
+                Регистрация и вход
+              </Link>
+              <Link className={s.ghostButton} href="/securecourse/admin/login">
                 Вход для команды
               </Link>
             </div>
@@ -298,8 +334,11 @@ export default function SecureCourseStudentPage() {
               </h1>
             </div>
             <div className={s.heroActions}>
-              <Link className={s.outlineButton} href="/securecourse">
-                Активировать другой токен
+              <Link className={s.outlineButton} href="/securecourse#activation">
+                Другой токен
+              </Link>
+              <Link className={s.ghostButton} href="/securecourse#student-registration">
+                Войти другим аккаунтом
               </Link>
               <button className={s.solidButton} disabled={busyAction === "logout"} onClick={handleLogout} type="button">
                 {busyAction === "logout" ? "Завершаем..." : "Выйти"}
@@ -309,19 +348,26 @@ export default function SecureCourseStudentPage() {
 
           <div className={`${s.gridThree} ${s.panelBody}`}>
             <div className={s.materialCard}>
-              <p className={s.surfaceEyebrow}>Ученик</p>
-              <strong>{session.user?.fullName || "Ученический доступ"}</strong>
-              <p className={s.helperText}>{session.user?.email || "Назначено менеджером"}</p>
+              <p className={s.surfaceEyebrow}>Профиль</p>
+              <strong>{session.user?.fullName || "Student access"}</strong>
+              <p className={s.helperText}>
+                {session.user?.email || "Email не указан"}
+                {session.user?.phone ? <><br />{session.user.phone}</> : null}
+              </p>
             </div>
             <div className={s.materialCard}>
               <p className={s.surfaceEyebrow}>Сессия</p>
               <strong>{session.sessionId}</strong>
-              <p className={s.helperText}>Heartbeat обновляет сессию каждые 60 секунд.</p>
+              <p className={s.helperText}>
+                До idle timeout: {formatCountdown(session.sessionMeta?.idleExpiresAt)}
+                <br />
+                Последняя активность: {formatDateTime(session.sessionMeta?.lastSeenAt)}
+              </p>
             </div>
             <div className={s.materialCard}>
-              <p className={s.surfaceEyebrow}>Курсы</p>
+              <p className={s.surfaceEyebrow}>Назначено курсов</p>
               <strong>{courses.length}</strong>
-              <p className={s.helperText}>Видны только назначенные программы.</p>
+              <p className={s.helperText}>В кабинете видны только те программы, которые назначены именно вам.</p>
             </div>
           </div>
         </section>
@@ -338,15 +384,22 @@ export default function SecureCourseStudentPage() {
               </div>
             </div>
 
-            <div className={s.panelBody}>
+            <div className={s.surfaceContent}>
               {!courses.length ? (
-                <p className={s.helperText}>Пока нет активных зачислений. Попросите менеджера назначить курс.</p>
-              ) : (
-                <div className={s.compactList}>
-                  {courses.map((enrollment) => (
+                <p className={s.helperText}>
+                  Пока нет назначенных курсов. Если вы только что зарегистрировались, менеджер должен зачислить вас на
+                  курс или выдать токен доступа.
+                </p>
+              ) : null}
+
+              <div className={s.courseList}>
+                {courses.map((enrollment) => {
+                  const isSelected = selectedEnrollmentId === enrollment.id;
+
+                  return (
                     <button
+                      className={isSelected ? s.courseCardActive : s.courseCard}
                       key={enrollment.id}
-                      className={selectedEnrollmentId === enrollment.id ? s.solidButton : s.outlineButton}
                       onClick={() => {
                         setSelectedEnrollmentId(enrollment.id);
                         setLessonState({
@@ -358,26 +411,31 @@ export default function SecureCourseStudentPage() {
                           error: ""
                         });
                       }}
-                      style={{ justifyContent: "space-between" }}
                       type="button"
                     >
-                      <span>{enrollment.course.title}</span>
-                      <span className={badgeClass(enrollment.status)}>{enrollment.status}</span>
+                      <div>
+                        <p className={s.surfaceEyebrow}>{enrollment.course?.title}</p>
+                        <h3 style={{ margin: "0 0 0.35rem" }}>{enrollment.course?.shortDescription || "Назначенный курс"}</h3>
+                        <p className={s.helperText}>{enrollment.course?.description || "Описание курса появится здесь."}</p>
+                      </div>
+                      <div className={s.compactList}>
+                        <span>Уроков: {(enrollment.course?.lessons || []).length}</span>
+                        <span>Прогресс: {enrollment.progressPercent ?? 0}%</span>
+                        <span className={badgeClass(enrollment.status)}>{enrollment.status}</span>
+                      </div>
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
 
               {selectedCourse ? (
-                <div style={{ marginTop: "1.5rem" }}>
-                  <p className={s.helperText} style={{ color: "var(--text-soft)", marginBottom: "1rem" }}>
-                    {selectedCourse.shortDescription || "Курс содержит уроки, видео и материалы."}
-                  </p>
+                <div className={s.sectionSpacingTop}>
+                  <p className={s.surfaceEyebrow}>Уроки курса</p>
                   <div className={s.compactList}>
                     {lessons.map((lesson) => (
                       <button
-                        key={lesson.id}
                         className={lessonState.lesson?.id === lesson.id ? s.solidButton : s.ghostButton}
+                        key={lesson.id}
                         onClick={() => openLesson(lesson.id)}
                         style={{ justifyContent: "space-between" }}
                         type="button"

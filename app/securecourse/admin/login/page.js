@@ -40,8 +40,8 @@ function LoginForm() {
         Авторизация в админке SecureCourse
       </h1>
       <p className={styles.helperText} style={{ marginBottom: "1.2rem" }}>
-        Здесь входят только администратор и менеджер. Ученики не используют логин и пароль - им выдается
-        одноразовый токен на публичной странице.
+        Здесь входят только администратор и менеджер. Ученики работают на публичной странице: могут активировать
+        одноразовый токен или зарегистрироваться по email и телефону, пройти верификацию и открыть свой кабинет.
       </p>
 
       <form className={styles.formStack} onSubmit={handleSubmit}>
@@ -50,7 +50,7 @@ function LoginForm() {
           <input
             className={styles.fieldInput}
             onChange={(event) => setLogin(event.target.value)}
-            placeholder="manager"
+            placeholder="admin"
             required
             type="text"
             value={login}
@@ -87,8 +87,8 @@ function LoginForm() {
           <Link className={styles.inlineLinkButton} href="/securecourse">
             Открыть публичную страницу
           </Link>
-          <Link className={styles.inlineLinkButton} href="/securecourse">
-            Назад к сайту
+          <Link className={styles.inlineLinkButton} href="/securecourse#student-registration">
+            Регистрация ученика
           </Link>
         </div>
       </form>

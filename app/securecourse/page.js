@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
+
 import SecureCourseActivationPanel from "@/components/securecourse-activation-panel";
+import SecureCourseStudentRegistrationPanel from "@/components/securecourse-student-registration-panel";
 import s from "./securecourse.module.css";
 
 const QUICK_POINTS = [
-  "IELTS и английский",
-  "Personal statement и scholarship essays",
+  "IELTS и академический английский",
+  "Personal statement, motivation letter и scholarship essays",
   "Документы, дедлайны и поступление за рубеж"
 ];
 
@@ -37,15 +39,18 @@ export default function SecureCoursePublicPage() {
           <div className={s.heroGrid}>
             <div className={s.heroCopy}>
               <p className={s.eyebrow}>Курсы по IELTS и admission</p>
-              <h1 className={s.heroTitle}>Откройте доступ по токену и сразу переходите к урокам.</h1>
+              <h1 className={s.heroTitle}>Откройте доступ по токену или зарегистрируйте аккаунт ученика.</h1>
               <p className={s.heroLead}>
-                Платформа для курсов по IELTS, английскому, документам, scholarship essays и поступлению за рубеж.
-                Менеджер выдает одноразовый токен, ученик активирует его здесь и попадает в кабинет без обычной
-                регистрации.
+                Платформа для курсов по IELTS, английскому, admission documents, scholarship essays и поступлению за
+                рубеж. Ученик может быстро войти по одноразовому токену от менеджера или создать обычный веб-аккаунт
+                с подтверждением email и телефона.
               </p>
               <div className={s.heroActions}>
                 <a className={s.solidButton} href="#activation">
                   Активировать токен
+                </a>
+                <a className={s.outlineButton} href="#student-registration">
+                  Регистрация ученика
                 </a>
                 <Link className={s.outlineButton} href="/securecourse/admin/login">
                   Открыть админку
@@ -65,8 +70,8 @@ export default function SecureCoursePublicPage() {
                 ))}
                 <article className={s.heroCard}>
                   <div>
-                    <strong>Доступ только по одноразовому токену</strong>
-                    <p>Без логина и пароля для ученика. Один токен - одна сессия.</p>
+                    <strong>Два сценария входа</strong>
+                    <p>Быстрый доступ по одноразовому токену или обычный аккаунт ученика с email/SMS верификацией.</p>
                   </div>
                 </article>
               </div>
@@ -77,6 +82,12 @@ export default function SecureCoursePublicPage() {
         <div id="activation">
           <Suspense fallback={null}>
             <SecureCourseActivationPanel />
+          </Suspense>
+        </div>
+
+        <div id="student-registration" className={s.sectionSpacingTop}>
+          <Suspense fallback={null}>
+            <SecureCourseStudentRegistrationPanel />
           </Suspense>
         </div>
       </div>

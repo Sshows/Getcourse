@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+
 import { activateAccess, getSecureCourseSession, logoutAccess } from "@/lib/securecourse-api";
 import styles from "@/app/securecourse/securecourse.module.css";
 
@@ -72,7 +73,7 @@ export default function SecureCourseActivationPanel() {
         sessionId: payload.session.id
       });
       setToken("");
-      setNotice("Токен активирован. Открываем кабинет ученика.");
+      setNotice("Токен принят. Открываем кабинет ученика.");
       router.push("/securecourse/student");
     } catch (requestError) {
       setError(requestError.message || "Не удалось активировать токен.");
@@ -107,12 +108,13 @@ export default function SecureCourseActivationPanel() {
     <section className={styles.surface} id="activation">
       <div className={styles.surfaceHeader}>
         <div>
-          <p className={styles.surfaceEyebrow}>Активация доступа</p>
-          <h2 className={styles.surfaceTitle}>Введите одноразовый токен, чтобы открыть кабинет ученика.</h2>
+          <p className={styles.surfaceEyebrow}>Быстрый вход по токену</p>
+          <h2 className={styles.surfaceTitle}>Введите одноразовый токен, если его выдал менеджер.</h2>
         </div>
         <p className={styles.helperText} style={{ maxWidth: "34rem", color: "var(--text-soft)" }}>
-          Ученики не создают аккаунт сами. Менеджер создает ученика, назначает курс, выдает токен и отправляет его в
-          WhatsApp, Telegram или email.
+          Этот сценарий нужен для быстрого контролируемого доступа. Менеджер создает ученика, назначает курс и
+          отправляет токен в WhatsApp, Telegram или email. Если ученику нужен обычный постоянный вход на сайт, ниже
+          есть регистрация с подтверждением email и телефона.
         </p>
       </div>
 
@@ -145,15 +147,15 @@ export default function SecureCourseActivationPanel() {
           {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
           <p className={styles.helperText}>
-            После успешной активации токен становится `USED`. Для повторного входа после logout нужен новый токен от
-            менеджера.
+            После успешной активации токен становится <code>USED</code>. Для повторного входа после logout нужен новый
+            токен от менеджера.
           </p>
         </form>
 
         <div className={styles.callout}>
           <p className={styles.surfaceEyebrow}>Текущее состояние</p>
           <h3 className={styles.calloutTitle}>
-            {session.authenticated ? "Сессия ученика уже активна" : "Пока нет активной ученической сессии"}
+            {session.authenticated ? "Сессия ученика уже активна" : "Сейчас нет активной сессии ученика"}
           </h3>
 
           {activation ? (
@@ -167,13 +169,14 @@ export default function SecureCourseActivationPanel() {
             </div>
           ) : session.authenticated ? (
             <div className={styles.compactList}>
-              <span>{session.user?.fullName || "Активная сессия"}</span>
+              <span>{session.user?.fullName || "Активная student session"}</span>
               <span>User ID: {session.userId}</span>
               <span>Session ID: {session.sessionId}</span>
             </div>
           ) : (
             <p className={styles.helperText}>
-              Начните с админки: создайте ученика, назначьте курс, выпустите токен и отправьте его ученику.
+              Если у ученика нет токена, используйте регистрацию ниже. Если нужен контролируемый разовый вход —
+              выпустите токен из админки.
             </p>
           )}
 
