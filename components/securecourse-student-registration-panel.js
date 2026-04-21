@@ -168,8 +168,8 @@ export default function SecureCourseStudentRegistrationPanel() {
           </h2>
         </div>
         <p className={styles.helperText} style={{ maxWidth: "34rem", color: "var(--text-soft)" }}>
-          Для курсов по IELTS, английскому и поступлению за рубеж доступны два сценария: быстрый вход по токену или
-          обычный аккаунт ученика с email, телефоном и паролем.
+          Если ученик будет заходить на сайт регулярно, ему удобнее один раз зарегистрироваться, подтвердить email и
+          телефон и дальше входить уже без токена.
         </p>
       </div>
 

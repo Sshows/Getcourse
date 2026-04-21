@@ -284,7 +284,7 @@ export default function SecureCourseStudentPage() {
           <section className={s.callout}>
             <p className={s.surfaceEyebrow}>Проверяем доступ</p>
             <h1 className={s.calloutTitle}>Смотрим, есть ли активная сессия ученика.</h1>
-            <p className={s.helperText}>Если токен уже активирован или ученик уже вошел через email/телефон, кабинет откроется автоматически.</p>
+            <p className={s.helperText}>Если токен уже активирован, кабинет откроется автоматически.</p>
           </section>
         </div>
       </main>
@@ -298,18 +298,18 @@ export default function SecureCourseStudentPage() {
         <div className={s.shell}>
           <section className={s.callout}>
             <p className={s.surfaceEyebrow}>Доступ к кабинету</p>
-            <h1 className={s.calloutTitle}>Сначала активируйте токен или войдите через подтвержденный student account.</h1>
+            <h1 className={s.calloutTitle}>Сначала активируйте токен, который выдал менеджер.</h1>
             <p className={s.helperText} style={{ color: "var(--text-soft)" }}>
-              На публичной странице ученик может либо ввести одноразовый токен от менеджера, либо зарегистрироваться по
-              email и телефону, пройти двойную верификацию и дальше заходить уже как в обычный web-кабинет.
+              На публичной странице ученик вводит одноразовый токен, активирует доступ и сразу попадает в кабинет только
+              с назначенными курсами.
             </p>
             {error ? <p className={s.feedbackError}>{error}</p> : null}
             <div className={s.heroActions}>
               <Link className={s.solidButton} href="/securecourse#activation">
                 Активировать токен
               </Link>
-              <Link className={s.outlineButton} href="/securecourse#student-registration">
-                Регистрация и вход
+              <Link className={s.outlineButton} href="/securecourse">
+                На публичную страницу
               </Link>
               <Link className={s.ghostButton} href="/securecourse/admin/login">
                 Вход для команды
@@ -337,8 +337,8 @@ export default function SecureCourseStudentPage() {
               <Link className={s.outlineButton} href="/securecourse#activation">
                 Другой токен
               </Link>
-              <Link className={s.ghostButton} href="/securecourse#student-registration">
-                Войти другим аккаунтом
+              <Link className={s.ghostButton} href="/securecourse">
+                На публичную страницу
               </Link>
               <button className={s.solidButton} disabled={busyAction === "logout"} onClick={handleLogout} type="button">
                 {busyAction === "logout" ? "Завершаем..." : "Выйти"}
@@ -352,7 +352,12 @@ export default function SecureCourseStudentPage() {
               <strong>{session.user?.fullName || "Student access"}</strong>
               <p className={s.helperText}>
                 {session.user?.email || "Email не указан"}
-                {session.user?.phone ? <><br />{session.user.phone}</> : null}
+                {session.user?.phone ? (
+                  <>
+                    <br />
+                    {session.user.phone}
+                  </>
+                ) : null}
               </p>
             </div>
             <div className={s.materialCard}>
@@ -387,8 +392,8 @@ export default function SecureCourseStudentPage() {
             <div className={s.surfaceContent}>
               {!courses.length ? (
                 <p className={s.helperText}>
-                  Пока нет назначенных курсов. Если вы только что зарегистрировались, менеджер должен зачислить вас на
-                  курс или выдать токен доступа.
+                  Пока нет назначенных курсов. Если вы только что активировали токен, менеджер должен зачислить вас на
+                  курс или выдать новый токен доступа.
                 </p>
               ) : null}
 
@@ -415,8 +420,12 @@ export default function SecureCourseStudentPage() {
                     >
                       <div>
                         <p className={s.surfaceEyebrow}>{enrollment.course?.title}</p>
-                        <h3 style={{ margin: "0 0 0.35rem" }}>{enrollment.course?.shortDescription || "Назначенный курс"}</h3>
-                        <p className={s.helperText}>{enrollment.course?.description || "Описание курса появится здесь."}</p>
+                        <h3 style={{ margin: "0 0 0.35rem" }}>
+                          {enrollment.course?.shortDescription || "Назначенный курс"}
+                        </h3>
+                        <p className={s.helperText}>
+                          {enrollment.course?.description || "Описание курса появится здесь."}
+                        </p>
                       </div>
                       <div className={s.compactList}>
                         <span>Уроков: {(enrollment.course?.lessons || []).length}</span>

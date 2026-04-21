@@ -15,9 +15,19 @@ $job = Start-Job -ScriptBlock {
 } -ArgumentList $workspace, $port
 
 try {
-  Start-Sleep -Seconds 8
+  $health = $null
+  for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    try {
+      $health = Invoke-RestMethod -Uri "$baseUrl/api/health"
+      break
+    } catch {
+      Start-Sleep -Milliseconds 700
+    }
+  }
 
-  $health = Invoke-RestMethod -Uri "$baseUrl/api/health"
+  if (-not $health) {
+    throw "SecureCourse app did not become ready on $baseUrl"
+  }
 
   try {
     $adminLogin = Invoke-RestMethod -Method Post -Uri "$apiBase/admin-auth/login" -ContentType "application/json" -Body (
@@ -42,8 +52,6 @@ try {
   $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
   $studentEmail = "student+$stamp@site.local"
   $studentPhone = "+7777$($stamp.ToString().Substring([Math]::Max(0, $stamp.ToString().Length - 7)))"
-  $registeredEmail = "registered+$stamp@site.local"
-  $registeredPhone = "+7999$($stamp.ToString().Substring([Math]::Max(0, $stamp.ToString().Length - 7)))"
 
   $createdUser = Invoke-RestMethod -Method Post -Uri "$apiBase/admin/users" -Headers $adminHeaders -ContentType "application/json" -Body (
     @{
@@ -141,34 +149,10 @@ try {
   $playback = Invoke-RestMethod -Method Post -Uri "$apiBase/student/lessons/$($lesson.id)/playback-access" -Headers $studentHeaders -ContentType "application/json" -Body "{}"
   $videoResponse = Invoke-WebRequest -Method Get -Uri ($baseUrl + $playback.playback.manifestUrl) -Headers $studentHeaders -UseBasicParsing
 
-  $registered = Invoke-RestMethod -Method Post -Uri "$apiBase/auth/register" -ContentType "application/json" -Body (
-    @{
-      fullName = "Dana Registered"
-      email = $registeredEmail
-      phone = $registeredPhone
-      password = "StrongPass123"
-    } | ConvertTo-Json
-  )
-
-  $verified = Invoke-RestMethod -Method Post -Uri "$apiBase/auth/verify" -ContentType "application/json" -Body (
-    @{
-      login = $registeredEmail
-      emailCode = $registered.verification.email.previewCode
-      smsCode = $registered.verification.sms.previewCode
-    } | ConvertTo-Json
-  )
-
-  $studentLogin = Invoke-RestMethod -Method Post -Uri "$apiBase/auth/login" -ContentType "application/json" -Body (
-    @{
-      login = $registeredEmail
-      password = "StrongPass123"
-    } | ConvertTo-Json
-  )
-
-  $usersAfterRegistration = Invoke-RestMethod -Method Get -Uri "$apiBase/admin/users" -Headers $adminHeaders
-  $registeredInAdmin = $usersAfterRegistration | Where-Object { $_.email -eq $registeredEmail } | Select-Object -First 1
   $activeSessions = Invoke-RestMethod -Method Get -Uri "$apiBase/admin/sessions" -Headers $adminHeaders
   $activatedSession = $activeSessions | Where-Object { $_.id -eq $activated.session.id } | Select-Object -First 1
+  $tokens = Invoke-RestMethod -Method Get -Uri "$apiBase/admin/tokens" -Headers $adminHeaders
+  $issuedRow = $tokens | Where-Object { $_.id -eq $issued.id } | Select-Object -First 1
 
   [pscustomobject]@{
     health = $health.ok
@@ -180,21 +164,13 @@ try {
     enrollmentStatus = $enrollment.status
     tokenStatus = $issued.status
     tokenPreview = $issued.preview
+    tokenTableStatus = if ($issuedRow) { $issuedRow.status } else { "" }
     studentCourses = $studentCourses.Count
     playbackBeforeUploadError = $playbackBeforeUploadError
     uploadStatusAfterPost = $uploadPayload.asset.status
     uploadStatusFinal = $readyAsset.status
     playbackManifest = $playback.playback.manifestUrl
     videoStatusCode = $videoResponse.StatusCode
-    registeredEmail = $registeredEmail
-    registeredPreviewEmailCode = $registered.verification.email.previewCode
-    registeredPreviewSmsCode = $registered.verification.sms.previewCode
-    verifySession = $verified.session.id
-    loginSession = $studentLogin.session.id
-    adminSeesRegisteredStudent = [bool]$registeredInAdmin
-    adminRegisteredStudentPhone = if ($registeredInAdmin) { $registeredInAdmin.phone } else { "" }
-    adminRegisteredStudentStatus = if ($registeredInAdmin) { $registeredInAdmin.studentAccount.status } else { "" }
-    adminRegisteredStudentVerified = if ($registeredInAdmin) { $registeredInAdmin.studentAccount.fullyVerified } else { $false }
     activeSessionIdleExpiresAt = if ($activatedSession) { $activatedSession.idleExpiresAt } else { "" }
   } | ConvertTo-Json -Depth 6
 }

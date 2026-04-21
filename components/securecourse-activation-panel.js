@@ -109,12 +109,11 @@ export default function SecureCourseActivationPanel() {
       <div className={styles.surfaceHeader}>
         <div>
           <p className={styles.surfaceEyebrow}>Быстрый вход по токену</p>
-          <h2 className={styles.surfaceTitle}>Введите одноразовый токен, если его выдал менеджер.</h2>
+          <h2 className={styles.surfaceTitle}>Введите одноразовый токен, который выдал менеджер.</h2>
         </div>
         <p className={styles.helperText} style={{ maxWidth: "34rem", color: "var(--text-soft)" }}>
-          Этот сценарий нужен для быстрого контролируемого доступа. Менеджер создает ученика, назначает курс и
-          отправляет токен в WhatsApp, Telegram или email. Если ученику нужен обычный постоянный вход на сайт, ниже
-          есть регистрация с подтверждением email и телефона.
+          Менеджер создает ученика, назначает курс и отправляет одноразовый токен. Токен открывает кабинет без логина и
+          пароля, сгорает после использования и не дает делить доступ бесконечно.
         </p>
       </div>
 
@@ -147,8 +146,8 @@ export default function SecureCourseActivationPanel() {
           {notice ? <p className={styles.feedbackSuccess}>{notice}</p> : null}
 
           <p className={styles.helperText}>
-            После успешной активации токен становится <code>USED</code>. Для повторного входа после logout нужен новый
-            токен от менеджера.
+            После успешной активации токен становится <code>USED</code>. Срок активации токена — 2 часа. После logout
+            нужен новый токен от менеджера.
           </p>
         </form>
 
@@ -175,8 +174,8 @@ export default function SecureCourseActivationPanel() {
             </div>
           ) : (
             <p className={styles.helperText}>
-              Если у ученика нет токена, используйте регистрацию ниже. Если нужен контролируемый разовый вход —
-              выпустите токен из админки.
+              Если нет активной сессии, введите токен, который выдал менеджер, и откройте кабинет только с назначенными
+              курсами.
             </p>
           )}
 

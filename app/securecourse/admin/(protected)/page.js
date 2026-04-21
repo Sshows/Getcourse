@@ -216,19 +216,8 @@ export default function SecureCourseAdminPage() {
     [forms.upload.lessonId, lessonOptions]
   );
 
-  const verifiedStudentsCount = useMemo(
-    () => students.filter((student) => student.studentAccount?.fullyVerified).length,
-    [students]
-  );
-
-  const pendingVerificationCount = useMemo(
-    () =>
-      students.filter(
-        (student) =>
-          student.studentAccount &&
-          !student.studentAccount.fullyVerified &&
-          student.studentAccount.status !== "BLOCKED"
-      ).length,
+  const studentsWithCoursesCount = useMemo(
+    () => students.filter((student) => (student.enrollments || []).length > 0).length,
     [students]
   );
 
@@ -478,7 +467,7 @@ export default function SecureCourseAdminPage() {
       const issued = await issueToken({
         userId: enrollment.userId,
         enrollmentId: enrollment.id,
-        activationExpiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+        activationExpiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
         note: "Выдан из админки SecureCourse"
       });
 
@@ -658,8 +647,8 @@ export default function SecureCourseAdminPage() {
                 Управление курсами по IELTS, английскому и поступлению за рубеж.
               </h1>
               <p className={styles.heroLead}>
-                Здесь менеджер создает ученика, курс и урок, зачисляет ученика, выдает одноразовый токен,
-                контролирует сессии и загружает видео. Весь flow должен проходиться без пустых шагов и тупиков.
+                Один рабочий контур: создать ученика, назначить курс, выпустить токен, загрузить видео и проверить,
+                что кабинет ученика открылся без тупиков.
               </p>
               <div className={styles.heroActions}>
                 <button className={styles.solidButton} onClick={() => loadAdminData()} type="button">
@@ -680,7 +669,7 @@ export default function SecureCourseAdminPage() {
             </div>
 
             <aside className={styles.heroPanel}>
-              <p className={styles.panelKicker}>Сейчас в работе</p>
+              <p className={styles.panelKicker}>Быстрые ориентиры</p>
               <div className={styles.panelList}>
                 <article className={styles.heroCard}>
                   <div>
@@ -704,16 +693,16 @@ export default function SecureCourseAdminPage() {
                 </article>
                 <article className={styles.heroCard}>
                   <div>
-                    <strong>Базовые программы уже загружены</strong>
+                    <strong>Стартовые программы уже на месте</strong>
                     <p>
-                      IELTS Writing, Speaking, scholarships, personal statement, admission documents и timeline.
+                      IELTS Writing, Speaking, scholarships, personal statement и admission timeline уже доступны.
                     </p>
                   </div>
                 </article>
                 <article className={styles.heroCard}>
                   <div>
                     <strong>Как дать доступ ученику</strong>
-                    <p>Создайте ученика, назначьте курс, выпустите токен, скопируйте его и отправьте на активацию.</p>
+                    <p>Создайте ученика, назначьте курс, выпустите токен и отправьте его сразу на активацию.</p>
                   </div>
                 </article>
               </div>
@@ -726,7 +715,7 @@ export default function SecureCourseAdminPage() {
             <span className={styles.metricLabel}>Ученики</span>
             <strong className={styles.metricValue}>{data.metrics.totalUsers}</strong>
             <span className={styles.statusMeta}>
-              {verifiedStudentsCount} verified • {pendingVerificationCount} ждут подтверждение
+              {data.metrics.activeUsers} активны • {studentsWithCoursesCount} уже зачислены на курсы
             </span>
           </article>
           <article className={styles.metricCard}>
@@ -1200,21 +1189,17 @@ export default function SecureCourseAdminPage() {
                       {student.phone ? <><br />{student.phone}</> : null}
                     </small>
                     <small>
-                      {student.studentAccount ? (
+                      <span className={badgeClass(student.status)}>{student.status}</span>
+                      <br />
+                      {(student.enrollments || []).some((enrollment) => enrollment.status === "ACTIVE")
+                        ? "готов к выдаче токена"
+                        : "ждет назначение курса"}
+                      {student.studentAccount?.lastLoginAt ? (
                         <>
-                          <span className={badgeClass(student.studentAccount.status)}>{student.studentAccount.status}</span>
                           <br />
-                          {student.studentAccount.fullyVerified ? "email и телефон подтверждены" : "ждет email/SMS verification"}
-                          {student.studentAccount.lastLoginAt ? (
-                            <>
-                              <br />
-                              последний вход: {formatDateTime(student.studentAccount.lastLoginAt)}
-                            </>
-                          ) : null}
+                          последний вход: {formatDateTime(student.studentAccount.lastLoginAt)}
                         </>
-                      ) : (
-                        "Профиль создан администратором, самостоятельный вход не настроен"
-                      )}
+                      ) : null}
                     </small>
                     <small>{(student.enrollments || []).length || 0}</small>
                   </div>
@@ -1345,7 +1330,7 @@ export default function SecureCourseAdminPage() {
                 ))
               ) : (
                 <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
-                  Пока нет ученических сессий. Они появятся после активации токена или входа ученика на сайте.
+                  Пока нет ученических сессий. Они появятся после активации одноразового токена.
                 </p>
               )}
             </div>
@@ -1411,7 +1396,7 @@ export default function SecureCourseAdminPage() {
                 ))
               ) : (
                 <p className={styles.helperText} style={{ padding: "1.25rem 1.5rem" }}>
-                  Логи появятся после действий в админке, регистрации учеников, активации токенов и входов на сайт.
+                  Логи появятся после действий в админке, активации токенов, открытия сессий и просмотра уроков.
                 </p>
               )}
             </div>

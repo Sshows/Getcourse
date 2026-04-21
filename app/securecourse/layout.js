@@ -1,7 +1,7 @@
 export const metadata = {
-  title: "SecureCourse Prototype",
+  title: "SecureCourse — Global Admissions Academy",
   description:
-    "Prototype of a protected learning platform with a public site, admin panel, and student web cabinet."
+    "Закрытая веб-платформа для курсов по IELTS, английскому и поступлению за рубеж с одноразовыми токенами, одной активной сессией и защищенным просмотром уроков."
 };
 
 export default function SecureCourseLayout({ children }) {
